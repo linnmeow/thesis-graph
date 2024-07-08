@@ -183,17 +183,18 @@ def test_model(model, dataloader, tokenizer, device, output_file):
         for batch in dataloader:
             input_ids = batch['input_ids'].to(device)
             attention_mask = batch['attention_mask'].to(device)
-            target_summary = batch['labels']
+            target_summaries = batch['labels']
 
-            summary_tokens = model.generate_summary(input_ids, attention_mask)
-            generated_summary = tokenizer.decode(summary_tokens[0], skip_special_tokens=True)
+            summary_tokens_batch = model.generate_summary(input_ids, attention_mask)
+            
+            for i in range(len(summary_tokens_batch)):
+                generated_summary = tokenizer.decode(summary_tokens_batch[i], skip_special_tokens=True)
+                reference_summary = tokenizer.decode(target_summaries[i], skip_special_tokens=True)
 
-            reference_summary = tokenizer.decode(target_summary[0], skip_special_tokens=True)
-
-            results.append({
-                'generated_summary': generated_summary,
-                'reference_summary': reference_summary
-            })
+                results.append({
+                    'generated_summary': generated_summary,
+                    'reference_summary': reference_summary
+                })
 
     with open(output_file, 'w') as f:
         json.dump(results, f, indent=4)
