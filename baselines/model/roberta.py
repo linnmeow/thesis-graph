@@ -17,8 +17,14 @@ class RobertaEmbedding(object):
         self._sep_token = self._tokenizer.sep_token
         self._embedding = self._model.embeddings.word_embeddings
         self._embedding.weight.requires_grad = False
-        self._eos = self._tokenizer.encoder[self._tokenizer._eos_token]
+        # self._eos = self._tokenizer.encoder[self._tokenizer._eos_token]
+        self._eos = self._tokenizer.eos_token_id
+
+    # def __call__(self, input_ids):
+    #     attention_mask = (input_ids != self._pad_id).float()
+    #     return self._model(input_ids, attention_mask=attention_mask)
 
     def __call__(self, input_ids):
         attention_mask = (input_ids != self._pad_id).float()
-        return self._model(input_ids, attention_mask=attention_mask)
+        outputs = self._model(input_ids, attention_mask=attention_mask)
+        return outputs.last_hidden_state 

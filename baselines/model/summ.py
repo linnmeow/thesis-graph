@@ -7,7 +7,7 @@ from .rnn import lstm_encoder
 from .roberta import RobertaEmbedding
 from .rnn import MultiLayerLSTMCells
 from .attention import step_attention, badanau_attention
-from .util import sequence_mean, len_mask
+from .util import sequence_mean, len_mask, reorder_sequence
 import torch.nn.functional as F
 from utils import END
 
@@ -86,16 +86,15 @@ class Seq2SeqSumm(nn.Module):
             self._init_enc_h.unsqueeze(1).expand(*size),
             self._init_enc_c.unsqueeze(1).expand(*size)
         )
-        enc_art, final_states = lstm_encoder(
-            article, self._enc_lstm, art_lens,
-            init_enc_states, self._embedding
-        )
-        # enc_art = self._embedding(article)  # Get embeddings from RoBERTa
-        # enc_art = enc_art.permute(1, 0, 2)  # Permute to (seq_len, batch, emb_dim)
-        # packed_input = nn.utils.rnn.pack_padded_sequence(enc_art, art_lens, enforce_sorted=False)
-        # enc_art, final_states = self._enc_lstm(packed_input, init_enc_states)
-        # enc_art, _ = nn.utils.rnn.pad_packed_sequence(enc_art)
 
+        # get embeddings from RoBERTa
+        emb_article = self._embedding(article)
+
+        # proceed with LSTM encoding using the embeddings
+        enc_art, final_states = lstm_encoder(
+            emb_article, self._enc_lstm, art_lens,
+            init_enc_states
+        )
         if self._enc_lstm.bidirectional:
             h, c = final_states
             final_states = (

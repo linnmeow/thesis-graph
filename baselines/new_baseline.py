@@ -9,7 +9,6 @@ from torch.utils.tensorboard import SummaryWriter
 from model.summ import Seq2SeqSumm
 from utils import END  # Make sure the utils module is in your path or adjust accordingly
 
-
 class CustomDataset(Dataset):
     def __init__(self, data, tokenizer, max_length=512):
         self.data = data
