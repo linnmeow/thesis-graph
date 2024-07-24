@@ -28,6 +28,8 @@ class Seq2SeqSumm(nn.Module):
             emb_dim, n_hidden, n_layer,
             bidirectional=bidirectional, dropout=dropout
         )
+        vocab_size = self._embedding.get_vocab_size()
+        self.vocab_size = vocab_size
         # initial encoder LSTM states are learned parameters
         state_layer = n_layer * (2 if bidirectional else 1)
         self._init_enc_h = nn.Parameter(
@@ -37,12 +39,12 @@ class Seq2SeqSumm(nn.Module):
             torch.Tensor(state_layer, n_hidden)
         )
         init.uniform_(self._init_enc_h, -INIT, INIT)
-        init.uniform_(self._init_enc_c, -INIT, INIT)
+        init.uniform_(self._init_enc_c, -INIT, INIT) # learnable initial states and cell states
 
-        # vanillat lstm / LNlstm
+        # vanillat lstm / LNlstm / decoder LSTM
         self._dec_lstm = MultiLayerLSTMCells(
             2*emb_dim, n_hidden, n_layer, dropout=dropout
-        )
+        ) 
         # project encoder final states to decoder initial states
         enc_out_dim = n_hidden * (2 if bidirectional else 1)
         self._dec_h = nn.Linear(enc_out_dim, n_hidden, bias=False)
@@ -68,14 +70,20 @@ class Seq2SeqSumm(nn.Module):
             self._embedding, self._dec_lstm,
             self._attn_wq, self._projection, self._attn_wb, self._attn_v
         )
+        # self._final_projection = nn.Linear(emb_dim, vocab_size, bias=False)
+
 
     def forward(self, article, art_lens, abstract):
         attention, init_dec_states = self.encode(article, art_lens)
+        print(f'attention: {attention.shape}')
+        print(f"init_dec_states: {len(init_dec_states)}")  # Should be 2
         mask = len_mask(art_lens, attention.device).unsqueeze(-2)
         logit = self._decoder((attention, mask), init_dec_states, abstract)
+        print(f'logit: {logit.shape}')
         return logit
 
     def encode(self, article, art_lens=None):
+        # dimension of the initial states
         size = (
             self._init_enc_h.size(0),
             # len(art_lens) if art_lens else 1,
@@ -88,7 +96,7 @@ class Seq2SeqSumm(nn.Module):
         )
 
         # get embeddings from RoBERTa
-        emb_article = self._embedding(article)
+        emb_article = self._embedding(article) # shape: [2, 512, 768]
 
         # proceed with LSTM encoding using the embeddings
         enc_art, final_states = lstm_encoder(
@@ -188,7 +196,9 @@ class AttentionalLSTMDecoder(object):
             query, attention, attention, self._attn_v, mem_mask=attn_mask, bias=self._attn_b)
         dec_out = self._projection(torch.cat([lstm_out, context], dim=1))
         states = (states, dec_out)
-        logit = torch.mm(dec_out, self._embedding.weight.t())
+        embedding_weight = self._embedding.get_embedding_weights()
+        logit = torch.mm(dec_out, embedding_weight.t())
+        # logit = torch.mm(dec_out, self._embedding.weight.t())
         return logit, states, score
 
     def decode_step(self, tok, states, attention, force_not_stop=False, eos=END):

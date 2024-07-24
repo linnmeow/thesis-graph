@@ -9,6 +9,7 @@ class RobertaEmbedding(object):
         #self._model = BertModel.from_pretrained(model)
         #self._tokenizer = BertTokenizer.from_pretrained(model)
         self._model.cuda()
+        # self._model.cpu()
         self._model.eval()
         print('Roberta initialized')
         # print('Bert initialized')
@@ -28,3 +29,9 @@ class RobertaEmbedding(object):
         attention_mask = (input_ids != self._pad_id).float()
         outputs = self._model(input_ids, attention_mask=attention_mask)
         return outputs.last_hidden_state 
+    
+    def get_vocab_size(self):
+        return self._tokenizer.vocab_size
+
+    def get_embedding_weights(self):
+        return self._embedding.weight

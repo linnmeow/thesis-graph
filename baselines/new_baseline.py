@@ -7,7 +7,7 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.tensorboard import SummaryWriter
 from model.summ import Seq2SeqSumm
-from utils import END  # Make sure the utils module is in your path or adjust accordingly
+from utils import END  
 
 class CustomDataset(Dataset):
     def __init__(self, data, tokenizer, max_length=512):
@@ -39,6 +39,7 @@ def data_collator(features):
     return batch
 
 def initialize_model(vocab_size, emb_dim, n_hidden, bidirectional, n_layer, dropout, device):
+
     model = Seq2SeqSumm(vocab_size, emb_dim, n_hidden, bidirectional, n_layer, dropout).to(device)
     return model
 
@@ -53,6 +54,13 @@ def train_model(model, train_loader, val_loader, optimizer, criterion, num_epoch
 
             optimizer.zero_grad()
             output = model(input_ids, art_lens, target_summary)
+
+            # Check for out-of-bounds indices
+            vocab_size = output.size(-1)
+            max_target_index = target_summary.max().item()
+            if max_target_index >= vocab_size:
+                raise ValueError(f"Target index out of bounds: {max_target_index} >= {vocab_size}")
+
             loss = criterion(output.view(-1, output.size(-1)), target_summary.view(-1))
             loss.backward()
             optimizer.step()
@@ -118,6 +126,7 @@ def open_json_file(data_dir, file_prefix):
 
 def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    # device = torch.device("cpu")
     emb_dim = 768
     hidden_size = 768
     n_layer = 2
