@@ -76,7 +76,7 @@ def read_and_save_datasets(data_dir, file_prefixes):
 
 if __name__ == "__main__":
 
-    data_directory = "/Users/lynn/desktop/thesis/cnn_dm4openie_extraction" 
+    data_directory = "/Users/lynn/desktop/thesis/cnn_dm4openie_extraction/article_collections" 
     prefixes = ["train", "valid", "test"]  
     
     read_and_save_datasets(
