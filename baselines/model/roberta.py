@@ -1,7 +1,6 @@
 import torch
-from transformers import RobertaTokenizer, RobertaModel, BertTokenizer, BertModel
-
-
+from transformers import RobertaTokenizer, RobertaModel
+    
 class RobertaEmbedding(object):
     def __init__(self, model='roberta-base'):
         self._model = RobertaModel.from_pretrained(model)
