@@ -127,6 +127,14 @@ class Seq2SeqSumm(nn.Module):
         mask = len_mask(art_lens, attention.device).unsqueeze(-2)
         attention = (attention, mask)
         tok = torch.LongTensor([go]*batch_size).to(article.device)
+
+        # Debugging prints
+        print(f"article shape: {article.shape}")
+        print(f"art_lens: {art_lens}")
+        print(f"attention shape: {attention[0].shape}")
+        print(f"init_dec_states shapes: {[s.shape for s in init_dec_states[0]]}")
+        print(f"tok shape: {tok.shape}")
+
         outputs = []
         attns = []
         states = init_dec_states
@@ -180,26 +188,57 @@ class AttentionalLSTMDecoder(object):
         logit = torch.stack(logits, dim=1)
         return logit
 
+    # def _step(self, tok, states, attention): # original
+    #     prev_states, prev_out = states
+        
+    #     lstm_in = torch.cat(
+    #         [self._embedding(tok).squeeze(1), prev_out],
+    #         dim=1
+    #     )
+    #     states = self._lstm(lstm_in, prev_states)
+    #     lstm_out = states[0][-1]
+    #     query = torch.mm(lstm_out, self._attn_w)
+    #     attention, attn_mask = attention
+    #     # context, score = badanau_attention(
+    #     #     query, attention, attention, mem_mask=attn_mask, bias=self._attn_b)
+    #     context, score = badanau_attention(
+    #         query, attention, attention, self._attn_v, mem_mask=attn_mask, bias=self._attn_b)
+    #     dec_out = self._projection(torch.cat([lstm_out, context], dim=1))
+    #     states = (states, dec_out)
+    #     embedding_weight = self._embedding.get_embedding_weights()
+    #     logit = torch.mm(dec_out, embedding_weight.t())
+    #     # logit = torch.mm(dec_out, self._embedding.weight.t())
+    #     return logit, states, score
+
     def _step(self, tok, states, attention):
         prev_states, prev_out = states
+
+        # Ensure tok has the correct dimensions
+        if tok.dim() == 1:
+            tok = tok.unsqueeze(1)
+
+        embedding_output = self._embedding(tok)
+
+        # Ensure embedding output has correct dimensions
+        if embedding_output.dim() == 3:
+            embedding_output = embedding_output.squeeze(1)
+
         lstm_in = torch.cat(
-            [self._embedding(tok).squeeze(1), prev_out],
+            [embedding_output, prev_out],
             dim=1
         )
         states = self._lstm(lstm_in, prev_states)
         lstm_out = states[0][-1]
         query = torch.mm(lstm_out, self._attn_w)
         attention, attn_mask = attention
-        # context, score = badanau_attention(
-        #     query, attention, attention, mem_mask=attn_mask, bias=self._attn_b)
         context, score = badanau_attention(
             query, attention, attention, self._attn_v, mem_mask=attn_mask, bias=self._attn_b)
         dec_out = self._projection(torch.cat([lstm_out, context], dim=1))
         states = (states, dec_out)
         embedding_weight = self._embedding.get_embedding_weights()
         logit = torch.mm(dec_out, embedding_weight.t())
-        # logit = torch.mm(dec_out, self._embedding.weight.t())
         return logit, states, score
+
 
     def decode_step(self, tok, states, attention, force_not_stop=False, eos=END):
         logit, states, score = self._step(tok, states, attention)
