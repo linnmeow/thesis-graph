@@ -43,8 +43,11 @@ def initialize_model(vocab_size, emb_dim, n_hidden, bidirectional, n_layer, drop
     model = Seq2SeqSumm(vocab_size, emb_dim, n_hidden, bidirectional, n_layer, dropout).to(device)
     return model
 
-def train_model(model, train_loader, val_loader, optimizer, criterion, num_epochs, device, log_dir):
+def train_model(model, train_loader, val_loader, optimizer, criterion, num_epochs, device, log_dir, model_save_path, patience=3):
     writer = SummaryWriter(log_dir)
+    best_val_loss = float('inf')
+    epochs_no_improve = 0
+
     for epoch in range(num_epochs):
         print(f"Starting epoch {epoch+1}/{num_epochs}...")
         model.train()
@@ -72,11 +75,25 @@ def train_model(model, train_loader, val_loader, optimizer, criterion, num_epoch
 
         avg_train_loss = total_loss / len(train_loader)
         avg_val_loss = validate_model(model, val_loader, criterion, device)
-        
+
         writer.add_scalar('Loss/Train', avg_train_loss, epoch)
         writer.add_scalar('Loss/Validation', avg_val_loss, epoch)
-        
+
         print(f'Epoch {epoch+1}, Train Loss: {avg_train_loss:.4f}, Validation Loss: {avg_val_loss:.4f}')
+
+        if avg_val_loss < best_val_loss:
+            best_val_loss = avg_val_loss
+            epochs_no_improve = 0
+            # save the model
+            torch.save(model.state_dict(), model_save_path)
+            print(f"Validation loss improved, model saved to {model_save_path}")
+        else:
+            epochs_no_improve += 1
+            print(f"Validation loss did not improve, epochs_no_improve: {epochs_no_improve}")
+
+        if epochs_no_improve >= patience:
+            print("Early stopping triggered")
+            break
 
     writer.close()
 
@@ -145,8 +162,10 @@ def main():
     vocab_size = tokenizer.vocab_size
     num_epochs = 5
     learning_rate = 0.001
-    batch_size = 2
+    batch_size = 8
     log_dir = './logs'
+    model_save_path = './best_model_baseline.pth'
+    patience = 3   
 
     model = initialize_model(vocab_size, emb_dim, hidden_size, bidirectional, n_layer, dropout, device)
     # wrap the model with DataParallel
@@ -157,7 +176,7 @@ def main():
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
     criterion = nn.CrossEntropyLoss(ignore_index=tokenizer.pad_token_id)
 
-    data_directory = "/Users/lynn/desktop/thesis/cnn_dm4openie_extraction/article_collections" 
+    data_directory = "/home1/s5734436/thesis-graph/cnn_dm4openie_extraction/article_collections" 
 
 
     train_data = open_json_file(data_directory, "train")
@@ -172,7 +191,10 @@ def main():
     valid_dataloader = DataLoader(valid_dataset, batch_size=batch_size, shuffle=True, collate_fn=data_collator)
     test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True, collate_fn=data_collator)
 
-    train_model(model, train_dataloader, valid_dataloader, optimizer, criterion, num_epochs, device, log_dir)
+    train_model(model, train_dataloader, valid_dataloader, optimizer, criterion, num_epochs, device, log_dir, model_save_path, patience)
+
+    # Load the best model before testing
+    model.load_state_dict(torch.load(model_save_path))
 
     output_file = os.path.join(data_directory, "generated_summaries.json")
     results = test_model(model, test_dataloader, tokenizer, device, output_file)
