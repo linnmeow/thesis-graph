@@ -119,7 +119,7 @@ class Seq2SeqSumm(nn.Module):
             [init_h[-1], sequence_mean(attention, art_lens, dim=1)], dim=1
         ))
         return attention, (init_dec_states, init_attn_out)
-
+    
     def batch_decode(self, article, art_lens, go, eos, max_len):
         """ greedy decode support batching"""
         batch_size = len(art_lens)
@@ -128,12 +128,12 @@ class Seq2SeqSumm(nn.Module):
         attention = (attention, mask)
         tok = torch.LongTensor([go]*batch_size).to(article.device)
 
-        # Debugging prints
-        print(f"article shape: {article.shape}")
-        print(f"art_lens: {art_lens}")
-        print(f"attention shape: {attention[0].shape}")
-        print(f"init_dec_states shapes: {[s.shape for s in init_dec_states[0]]}")
-        print(f"tok shape: {tok.shape}")
+        # # Debugging prints
+        # print(f"article shape: {article.shape}")
+        # print(f"art_lens: {art_lens}")
+        # print(f"attention shape: {attention[0].shape}")
+        # print(f"init_dec_states shapes: {[s.shape for s in init_dec_states[0]]}")
+        # print(f"tok shape: {tok.shape}")
 
         outputs = []
         attns = []

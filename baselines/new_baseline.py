@@ -121,16 +121,28 @@ def test_model(model, dataloader, tokenizer, device, output_file):
         for batch_idx, batch in enumerate(dataloader):
             input_ids = batch['input_ids'].to(device)
             attention_mask = batch['attention_mask'].to(device)
-            target_summaries = batch['labels']
             art_lens = (attention_mask != 0).sum(dim=1)  # Calculate article lengths
 
+            # Generate summaries
             summary_tokens_batch, _ = model.batch_decode(input_ids, art_lens, tokenizer.cls_token_id, tokenizer.sep_token_id, max_len=512)
-            
-            for i in range(len(summary_tokens_batch)):
-                generated_summary = tokenizer.decode(summary_tokens_batch[i], skip_special_tokens=True)
-                reference_summary = tokenizer.decode(target_summaries[i], skip_special_tokens=True)
 
+            # summary_tokens_batch has shape (max_len, batch_size)
+            # Transpose to get (batch_size, max_len)
+            summary_tokens_batch = summary_tokens_batch.transpose(0, 1)
+
+            # Iterate over the batch
+            for i in range(summary_tokens_batch.size(0)):
+                summary_tokens = summary_tokens_batch[i].tolist()  # Get the tokens for this batch element
+                generated_summary = tokenizer.decode(summary_tokens, skip_special_tokens=True)
+            # # Generate summaries
+            # summary_tokens_batch, _ = model.batch_decode(input_ids, art_lens, tokenizer.cls_token_id, tokenizer.sep_token_id, max_len=512)
+            
+            # for i in range(len(summary_tokens_batch)):
+            #     generated_summary = tokenizer.decode(summary_tokens_batch[i], skip_special_tokens=True)
+                reference_summary = batch['highlights'][i]
+                source_text = batch['article'][i]
                 results.append({
+                    'source_text': source_text,
                     'generated_summary': generated_summary,
                     'reference_summary': reference_summary
                 })
@@ -160,7 +172,7 @@ def main():
     dropout = 0.2
     tokenizer = RobertaTokenizer.from_pretrained('roberta-base')
     vocab_size = tokenizer.vocab_size
-    num_epochs = 5
+    num_epochs = 10
     learning_rate = 0.001
     batch_size = 8
     log_dir = './logs'
