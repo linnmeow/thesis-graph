@@ -128,17 +128,11 @@ def test_model(model, dataloader, tokenizer, device, output_file):
 
             # summary_tokens_batch has shape (max_len, batch_size)
             # Transpose to get (batch_size, max_len)
-            summary_tokens_batch = summary_tokens_batch.transpose(0, 1)
+            summary_tokens_batch = list(map(list, zip(*summary_tokens_batch)))
 
-            # Iterate over the batch
-            for i in range(summary_tokens_batch.size(0)):
-                summary_tokens = summary_tokens_batch[i].tolist()  # Get the tokens for this batch element
+            for i in range(len(summary_tokens_batch)): 
+                summary_tokens = summary_tokens_batch[i]  # Get the tokens for this batch element
                 generated_summary = tokenizer.decode(summary_tokens, skip_special_tokens=True)
-            # # Generate summaries
-            # summary_tokens_batch, _ = model.batch_decode(input_ids, art_lens, tokenizer.cls_token_id, tokenizer.sep_token_id, max_len=512)
-            
-            # for i in range(len(summary_tokens_batch)):
-            #     generated_summary = tokenizer.decode(summary_tokens_batch[i], skip_special_tokens=True)
                 reference_summary = batch['highlights'][i]
                 source_text = batch['article'][i]
                 results.append({
