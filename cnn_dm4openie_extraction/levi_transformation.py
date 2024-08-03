@@ -31,22 +31,43 @@ def create_directed_graph(triples):
         G.add_edge(s, o, predicate=r)  # add edge with predicate as attribute
     return G
 
+def prune_small_subgraphs(G):
+
+    if isinstance(G, nx.DiGraph):
+        # for directed graphs, use strongly connected components
+        subgraphs = [G.subgraph(c).copy() for c in nx.weakly_connected_components(G)]
+        # filter out small subgraphs (fewer than 3 nodes)
+        filtered_subgraphs = [sg for sg in subgraphs if len(sg.nodes) >= 3]
+    else:
+        # for undirected graphs, use connected components
+        subgraphs = [G.subgraph(c).copy() for c in nx.connected_components(G)]
+        # filter out small subgraphs (fewer than 4 nodes)
+        filtered_subgraphs = [sg for sg in subgraphs if len(sg.nodes) >= 4]
+   
+    
+    # create a new graph combining the filtered subgraphs
+    pruned_G = nx.DiGraph() if isinstance(G, nx.DiGraph) else nx.Graph()
+    for sg in filtered_subgraphs:
+        pruned_G = nx.compose(pruned_G, sg)
+    
+    return pruned_G
+
+
 def load_data(data_path): 
     with open(data_path, "r") as f:
         return json.load(f)
 
 def visualize_graph(G, entry_id):
     plt.figure(figsize=(12, 8))
-    pos = nx.spring_layout(G, k=0.35)  # positions for all nodes with further increased spacing
+    pos = nx.spring_layout(G, k=0.35)  
 
-    # Drawing the graph with adjusted parameters for better visualization
     nx.draw(G, pos, with_labels=True, node_size=200, node_color="skyblue", font_size=10, font_weight="bold",
             edge_color="grey", width=1.0, alpha=0.6)
 
     if isinstance(G, nx.DiGraph):
-        edge_labels = nx.get_edge_attributes(G, 'predicate')  # get edge labels
-        nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels, font_size=8)  # draw edge labels
-        nx.draw_networkx_edges(G, pos, arrowstyle='-|>', arrowsize=20, edge_color='grey', width=2.0)  # draw directed edges
+        edge_labels = nx.get_edge_attributes(G, 'predicate')  
+        nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels, font_size=8) 
+        nx.draw_networkx_edges(G, pos, arrowstyle='-|>', arrowsize=20, edge_color='grey', width=2.0) 
 
     plt.title(f"Knowledge Graph for Entry ID: {entry_id}")
     plt.show()
@@ -76,5 +97,9 @@ if __name__ == "__main__":
                 # create normal directed graph
                 # G = create_directed_graph(triples)
                 
-                # visualize the graph for the current entry
-                visualize_graph(G, entry['id']) 
+                G = prune_small_subgraphs(G)
+                
+                if len(G.nodes) > 0:
+                    visualize_graph(G, entry['id'])
+                else:
+                    print(f"All subgraphs were pruned for Entry ID: {entry['id']}")
