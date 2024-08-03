@@ -62,7 +62,6 @@ def test_model(model, dataloader, tokenizer, device, output_file):
             attention_mask = batch['attention_mask'].to(device)
             art_lens = (attention_mask != 0).sum(dim=1)  # Calculate article lengths
 
-
             # Generate summaries
             summary_tokens_batch, _ = model.batch_decode(input_ids, art_lens, tokenizer.cls_token_id, tokenizer.sep_token_id, max_len=512)
 
@@ -71,7 +70,6 @@ def test_model(model, dataloader, tokenizer, device, output_file):
             summary_tokens_batch = list(map(list, zip(*summary_tokens_batch)))
 
             # Iterate over the batch
-
             for i in range(len(summary_tokens_batch)): 
                 summary_tokens = summary_tokens_batch[i]  # Get the tokens for this batch element
                 generated_summary = tokenizer.decode(summary_tokens, skip_special_tokens=True)

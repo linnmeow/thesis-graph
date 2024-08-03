@@ -28,7 +28,9 @@ class CustomDataset(Dataset):
         return {
             'input_ids': inputs['input_ids'].squeeze(),
             'attention_mask': inputs['attention_mask'].squeeze(),
-            'labels': outputs['input_ids'].squeeze()
+            'labels': outputs['input_ids'].squeeze(),
+            'article': article,
+            'highlights': highlights
         }
 
 def data_collator(features):
@@ -36,6 +38,8 @@ def data_collator(features):
     batch['input_ids'] = torch.stack([f['input_ids'] for f in features])
     batch['attention_mask'] = torch.stack([f['attention_mask'] for f in features])
     batch['labels'] = torch.stack([f['labels'] for f in features])
+    batch['article'] = [f['article'] for f in features]
+    batch['highlights'] = [f['highlights'] for f in features]
     return batch
 
 def initialize_model(vocab_size, emb_dim, n_hidden, bidirectional, n_layer, dropout, device):
