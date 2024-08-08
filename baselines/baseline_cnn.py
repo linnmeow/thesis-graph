@@ -60,7 +60,6 @@ class SummaryDecoder(nn.Module):
         self.hidden_size = hidden_size
         self.output_size = output_size
         self.lstm = nn.LSTM(hidden_size, hidden_size, num_layers=1)
-        # self.attention_document = nn.Linear(hidden_size, hidden_size)
         self.W5 = nn.Linear(hidden_size, hidden_size)
         self.W6 = nn.Linear(hidden_size, hidden_size)
         self.u1 = nn.Parameter(torch.randn(hidden_size))
@@ -70,14 +69,9 @@ class SummaryDecoder(nn.Module):
         # lstm processing
         lstm_output, hidden_state = self.lstm(input_token.unsqueeze(1), hidden_state)
 
-        # print(f"input_token size: {input_token.size()}")
-        # print(f"lstm_output size: {lstm_output.size()}")  # check the size of lstm_output
-        # print(f"document_output size: {document_output.size()}")
-
         # expand lstm output to match the shape of document output
         lstm_output_tiled = lstm_output.expand(-1, document_output.size(1), -1)
         # attention mechanism over document encoder outputs
-        # transform the hidden states 
         transformed_lstm_output = self.W5(lstm_output_tiled)  # shape: [batch_size, seq_len, hidden_size]
         transformed_document_output = self.W6(document_output)  # shape: [batch_size, seq_len, hidden_size]
 
@@ -90,9 +84,6 @@ class SummaryDecoder(nn.Module):
         document_attention_weights = F.softmax(document_scores, dim=1) # shape: [batch_size, seq_len]
         # compute the context vector 
         document_context_vector = torch.sum(document_attention_weights.unsqueeze(2) * document_output, dim=1)  # shape: [batch_size, hidden_size]    
-
-        # print(f"document_context_vector size: {document_context_vector.size()}")
-        # print(f"lstm_output size: {(lstm_output.squeeze(1)).size()}")
 
         # combine LSTM output with document context vector
         combined_context = torch.cat((lstm_output.squeeze(1), document_context_vector), dim=1) # shape: [batch_size, hidden_size * 2]
@@ -119,16 +110,9 @@ class Seq2Seq(nn.Module):
         outputs = []
  
         for t in range(target_summary.size(1)):
-            # pass the current input token and hidden state to the decoder
             output, hidden_state = self.decoder(decoder_input, hidden_state, document_output, document_mask)
             outputs.append(output.unsqueeze(1))  # append the decoder's output for the current time step to the list of outputs
-        # code for teacher forcing
-        #     teacher_force = torch.rand(1).item() < teacher_forcing_ratio  # determine whether to use teacher forcing 
 
-        #     # update the decoder input for the next time step, if teacher forcing, use the actual token from the target summary
-        #     # otherwise use the token predicted by the decoder 
-        #     decoder_input = target_summary[:, t, :] if teacher_force else output
-        # pass the current input token and hidden state to the decoder
         outputs = torch.cat(outputs, dim=1)
         return outputs
 
@@ -159,12 +143,18 @@ def initialize_model(hidden_size, output_size, device):
     model = Seq2Seq(encoder, decoder, device).to(device)
     return model
 
-def train_model(model, train_loader, val_loader, optimizer, criterion, num_epochs, device, log_dir):
+def train_model(model, train_loader, val_loader, optimizer, criterion, num_epochs, device, log_dir, early_stopping_patience=3):
     writer = SummaryWriter(log_dir)
+    best_val_loss = float('inf')
+    epochs_no_improve = 0
+
     for epoch in range(num_epochs):
         model.train()
         total_loss = 0
-        for batch in train_loader:
+
+        print(f"Epoch {epoch+1}/{num_epochs}")
+
+        for batch_idx, batch in enumerate(train_loader):
             input_ids, attention_mask, target_summary = batch['input_ids'].to(device), batch['attention_mask'].to(device), batch['labels'].to(device)
 
             optimizer.zero_grad()
@@ -175,6 +165,9 @@ def train_model(model, train_loader, val_loader, optimizer, criterion, num_epoch
 
             total_loss += loss.item()
 
+            if batch_idx % 100 == 0:  # Print every 100 batches
+                print(f"Batch {batch_idx+1}/{len(train_loader)}, Loss: {loss.item():.4f}")
+
         avg_train_loss = total_loss / len(train_loader)
         avg_val_loss = validate_model(model, val_loader, criterion, device)
         
@@ -182,6 +175,20 @@ def train_model(model, train_loader, val_loader, optimizer, criterion, num_epoch
         writer.add_scalar('Loss/Validation', avg_val_loss, epoch)
         
         print(f'Epoch {epoch+1}, Train Loss: {avg_train_loss:.4f}, Validation Loss: {avg_val_loss:.4f}')
+
+        # Early stopping
+        if avg_val_loss < best_val_loss:
+            best_val_loss = avg_val_loss
+            epochs_no_improve = 0
+            torch.save(model.state_dict(), os.path.join(log_dir, 'best_model.pth'))  # Save the best model
+            print("Validation loss improved, saving model...")
+        else:
+            epochs_no_improve += 1
+            print(f"No improvement in validation loss for {epochs_no_improve} epoch(s)")
+
+        if epochs_no_improve >= early_stopping_patience:
+            print("Early stopping triggered. Stopping training.")
+            break
 
     writer.close()
 
@@ -203,7 +210,7 @@ def test_model(model, dataloader, tokenizer, device, output_file):
     model.eval()
     results = []
     with torch.no_grad():
-        for batch in dataloader:
+        for batch_idx, batch in enumerate(dataloader):
             input_ids = batch['input_ids'].to(device)
             attention_mask = batch['attention_mask'].to(device)
             target_summary = batch['labels']
@@ -218,6 +225,9 @@ def test_model(model, dataloader, tokenizer, device, output_file):
                 'reference_summary': reference_summary
             })
 
+            if batch_idx % 100 == 0:  # print every 100 batches
+                print(f"Batch {batch_idx+1}/{len(dataloader)} processed.")
+
     with open(output_file, 'w') as f:
         json.dump(results, f, indent=4)
 
@@ -230,18 +240,15 @@ def open_json_file(data_dir, file_prefix):
     return data
 
 def print_dataloader_samples(dataloader, num_batches=1):
-    # Iterate through the dataloader
     for i, batch in enumerate(dataloader):
         if i >= num_batches:
-            break  # Stop after printing the desired number of batches
-        
+            break
         print(f"Batch {i + 1}:")
         for key, value in batch.items():
-            # Ensure printing tensor values is limited for readability
             if torch.is_tensor(value):
-                print(f"{key}: {value.shape} - {value[:2]}")  # Print shape and the first 2 elements
+                print(f"{key}: {value.shape} - {value[:2]}")
             else:
-                print(f"{key}: {value[:2]}")  # Print the first 2 elements if it's not a tensor
+                print(f"{key}: {value[:2]}")
         print("\n")
 
 if __name__ == "__main__":
@@ -250,16 +257,16 @@ if __name__ == "__main__":
     hidden_size = 768
     tokenizer = RobertaTokenizer.from_pretrained('roberta-base')
     output_size = tokenizer.vocab_size
-    num_epochs = 10
+    num_epochs = 15
     learning_rate = 0.001
-    batch_size = 2
+    batch_size = 16
     log_dir = './logs'
 
     model = initialize_model(hidden_size, output_size, device)
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
     criterion = nn.CrossEntropyLoss(ignore_index=tokenizer.pad_token_id)
 
-    data_directory = "/Users/lynn/desktop/thesis/cnn_dm4openie_extraction/article_collections" 
+    data_directory = "/home1/s5734436/thesis-graph/cnn_dm4openie_extraction/article_collections" 
     train_data = open_json_file(data_directory, "train")
     valid_data = open_json_file(data_directory, "valid")
     test_data = open_json_file(data_directory, "test")
@@ -280,4 +287,3 @@ if __name__ == "__main__":
     for i in range(5):
         print(f"Generated Summary {i+1}: {results[i]['generated_summary']}")
         print(f"Reference Summary {i+1}: {results[i]['reference_summary']}")
-
