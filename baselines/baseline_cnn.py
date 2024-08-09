@@ -148,6 +148,8 @@ def train_model(model, train_loader, val_loader, optimizer, criterion, num_epoch
     best_val_loss = float('inf')
     epochs_no_improve = 0
 
+    scaler = torch.cuda.amp.GradScaler()  # initialize GradScaler
+
     for epoch in range(num_epochs):
         model.train()
         total_loss = 0
@@ -155,17 +157,23 @@ def train_model(model, train_loader, val_loader, optimizer, criterion, num_epoch
         print(f"Epoch {epoch+1}/{num_epochs}")
 
         for batch_idx, batch in enumerate(train_loader):
-            input_ids, attention_mask, target_summary = batch['input_ids'].to(device), batch['attention_mask'].to(device), batch['labels'].to(device)
+            input_ids = batch['input_ids'].to(device)
+            attention_mask = batch['attention_mask'].to(device)
+            target_summary = batch['labels'].to(device)
 
             optimizer.zero_grad()
-            output = model(input_ids, attention_mask, target_summary)
-            loss = criterion(output.view(-1, output.size(-1)), target_summary.view(-1))
-            loss.backward()
-            optimizer.step()
-
+            
+            with torch.cuda.amp.autocast():  
+                output = model(input_ids, attention_mask, target_summary)
+                loss = criterion(output.view(-1, output.size(-1)), target_summary.view(-1))
+            
+            scaler.scale(loss).backward()  # scale the loss and backpropagate
+            scaler.step(optimizer)         # update optimizer
+            scaler.update()               # update scaler
+            
             total_loss += loss.item()
 
-            if batch_idx % 100 == 0:  # Print every 100 batches
+            if batch_idx % 100 == 0:  # print every 100 batches
                 print(f"Batch {batch_idx+1}/{len(train_loader)}, Loss: {loss.item():.4f}")
 
         avg_train_loss = total_loss / len(train_loader)
@@ -263,6 +271,14 @@ if __name__ == "__main__":
     log_dir = './logs'
 
     model = initialize_model(hidden_size, output_size, device)
+    
+    # check for multiple GPUs and wrap the model in DataParallel if available
+    if torch.cuda.device_count() > 1:
+        print(f"Using {torch.cuda.device_count()} GPUs for training.")
+        model = torch.nn.DataParallel(model)
+    
+    model.to(device)
+
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
     criterion = nn.CrossEntropyLoss(ignore_index=tokenizer.pad_token_id)
 
