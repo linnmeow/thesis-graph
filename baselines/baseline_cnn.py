@@ -35,6 +35,8 @@ def data_collator(features):
     batch['input_ids'] = torch.stack([f['input_ids'] for f in features])
     batch['attention_mask'] = torch.stack([f['attention_mask'] for f in features])
     batch['labels'] = torch.stack([f['labels'] for f in features])
+    batch['article'] = [f['article'] for f in features]
+    batch['highlights'] = [f['highlights'] for f in features]
     return batch
 
 class DocumentEncoder(nn.Module):
@@ -60,8 +62,8 @@ class SummaryDecoder(nn.Module):
         self.hidden_size = hidden_size
         self.output_size = output_size
         self.lstm = nn.LSTM(hidden_size, hidden_size, num_layers=1)
-        self.W5 = nn.Linear(hidden_size, hidden_size)
-        self.W6 = nn.Linear(hidden_size, hidden_size)
+        self.W1 = nn.Linear(hidden_size, hidden_size)
+        self.W2 = nn.Linear(hidden_size, hidden_size)
         self.u1 = nn.Parameter(torch.randn(hidden_size))
         self.Wout = nn.Linear(hidden_size * 2, output_size)
 
@@ -70,11 +72,11 @@ class SummaryDecoder(nn.Module):
         lstm_output, hidden_state = self.lstm(input_token.unsqueeze(1), hidden_state)
 
         # expand lstm output to match the shape of document output
-        lstm_output_tiled = lstm_output.expand(-1, document_output.size(1), -1)
+        lstm_output_tiled = lstm_output.expand(-1, document_output.size(1), -1) # batch_size, 1, hidden_size -> batch_size, seq_len, hidden_size
         # attention mechanism over document encoder outputs
-        transformed_lstm_output = self.W5(lstm_output_tiled)  # shape: [batch_size, seq_len, hidden_size]
-        transformed_document_output = self.W6(document_output)  # shape: [batch_size, seq_len, hidden_size]
-
+        transformed_lstm_output = self.W1(lstm_output_tiled)  # shape: [batch_size, seq_len, hidden_size]
+        transformed_document_output = self.W2(document_output)  # shape: [batch_size, seq_len, hidden_size]
+  
         # combine and apply non-linear activation
         combined = torch.tanh(transformed_lstm_output + transformed_document_output)  # shape: [batch_size, seq_len, hidden_size]
         # project to scalar with u1
@@ -138,6 +140,7 @@ class Seq2Seq(nn.Module):
         return summary_tokens
 
 def initialize_model(hidden_size, output_size, device):
+    print("Initializing model...")
     encoder = DocumentEncoder('roberta-base', hidden_size).to(device)
     decoder = SummaryDecoder(hidden_size, output_size).to(device)
     model = Seq2Seq(encoder, decoder, device).to(device)
@@ -151,6 +154,7 @@ def train_model(model, train_loader, val_loader, optimizer, criterion, num_epoch
     scaler = torch.cuda.amp.GradScaler()  # initialize GradScaler
 
     for epoch in range(num_epochs):
+        print(f"Starting epoch {epoch+1}/{num_epochs}...")
         model.train()
         total_loss = 0
 
@@ -204,12 +208,14 @@ def validate_model(model, dataloader, criterion, device):
     model.eval()
     total_loss = 0
     with torch.no_grad():
-        for batch in dataloader:
+        for batch_idx, batch in enumerate(dataloader):
             input_ids, attention_mask, target_summary = batch['input_ids'].to(device), batch['attention_mask'].to(device), batch['labels'].to(device)
 
             output = model(input_ids, attention_mask, target_summary)
             loss = criterion(output.view(-1, output.size(-1)), target_summary.view(-1))
             total_loss += loss.item()
+            if batch_idx % 10 == 0:
+                print(f"Validation Batch {batch_idx}/{len(dataloader)}, Loss: {loss.item():.4f}")
 
     avg_loss = total_loss / len(dataloader)
     return avg_loss
@@ -226,9 +232,10 @@ def test_model(model, dataloader, tokenizer, device, output_file):
             summary_tokens = model.generate_summary(input_ids, attention_mask)
             generated_summary = tokenizer.decode(summary_tokens[0], skip_special_tokens=True)
 
-            reference_summary = tokenizer.decode(target_summary[0], skip_special_tokens=True)
-
+            reference_summary = batch['highlights'][i]
+            source_text = batch['article'][i]
             results.append({
+                'source_text': source_text,
                 'generated_summary': generated_summary,
                 'reference_summary': reference_summary
             })
@@ -243,6 +250,7 @@ def test_model(model, dataloader, tokenizer, device, output_file):
 
 def open_json_file(data_dir, file_prefix):
     input_path = os.path.join(data_dir, f"{file_prefix}_article.json")
+    print(f"Loading data from {input_path}...")
     with open(input_path, "r") as f:
         data = json.load(f)
     return data
@@ -261,7 +269,7 @@ def print_dataloader_samples(dataloader, num_batches=1):
 
 if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
+    print(f"Using device: {device}")
     hidden_size = 768
     tokenizer = RobertaTokenizer.from_pretrained('roberta-base')
     output_size = tokenizer.vocab_size
@@ -276,8 +284,8 @@ if __name__ == "__main__":
     if torch.cuda.device_count() > 1:
         print(f"Using {torch.cuda.device_count()} GPUs for training.")
         model = torch.nn.DataParallel(model)
-    
-    model.to(device)
+            
+    # model.to(device)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
     criterion = nn.CrossEntropyLoss(ignore_index=tokenizer.pad_token_id)
