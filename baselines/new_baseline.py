@@ -58,10 +58,10 @@ def train_model(model, train_loader, val_loader, optimizer, criterion, num_epoch
         total_loss = 0
         for batch_idx, batch in enumerate(train_loader):
             input_ids, attention_mask, target_summary = batch['input_ids'].to(device), batch['attention_mask'].to(device), batch['labels'].to(device)
-            art_lens = (attention_mask != 0).sum(dim=1)  # Calculate article lengths
+            art_lens = (attention_mask != 0).sum(dim=1).to(device)  # Calculate article lengths
 
             optimizer.zero_grad()
-            output = model(input_ids, art_lens, target_summary)
+            output = model(input_ids, art_lens, target_summary.to(device))
 
             # Check for out-of-bounds indices
             vocab_size = output.size(-1)
@@ -69,7 +69,7 @@ def train_model(model, train_loader, val_loader, optimizer, criterion, num_epoch
             if max_target_index >= vocab_size:
                 raise ValueError(f"Target index out of bounds: {max_target_index} >= {vocab_size}")
 
-            loss = criterion(output.view(-1, output.size(-1)), target_summary.view(-1))
+            loss = criterion(output.view(-1, output.size(-1)), target_summary.view(-1).to(device))
             loss.backward()
             optimizer.step()
 
@@ -107,10 +107,10 @@ def validate_model(model, dataloader, criterion, device):
     with torch.no_grad():
         for batch_idx, batch in enumerate(dataloader):
             input_ids, attention_mask, target_summary = batch['input_ids'].to(device), batch['attention_mask'].to(device), batch['labels'].to(device)
-            art_lens = (attention_mask != 0).sum(dim=1)  # Calculate article lengths
+            art_lens = (attention_mask != 0).sum(dim=1).to(device)  # Calculate article lengths
 
-            output = model(input_ids, art_lens, target_summary)
-            loss = criterion(output.view(-1, output.size(-1)), target_summary.view(-1))
+            output = model(input_ids, art_lens, target_summary.to(device))
+            loss = criterion(output.view(-1, output.size(-1)), target_summary.view(-1).to(device))
             total_loss += loss.item()
             if batch_idx % 10 == 0:
                 print(f"Validation Batch {batch_idx}/{len(dataloader)}, Loss: {loss.item():.4f}")
@@ -125,7 +125,7 @@ def test_model(model, dataloader, tokenizer, device, output_file):
         for batch_idx, batch in enumerate(dataloader):
             input_ids = batch['input_ids'].to(device)
             attention_mask = batch['attention_mask'].to(device)
-            art_lens = (attention_mask != 0).sum(dim=1)  # Calculate article lengths
+            art_lens = (attention_mask != 0).sum(dim=1).to(device)  # Calculate article lengths
 
             # Generate summaries
             summary_tokens_batch, _ = model.batch_decode(input_ids, art_lens, tokenizer.cls_token_id, tokenizer.sep_token_id, max_len=512)
@@ -177,14 +177,14 @@ def main():
     model_save_path = './best_model_baseline.pth'
     patience = 3   
 
-    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate) # define optimizerbefore initializing model
-    criterion = nn.CrossEntropyLoss(ignore_index=tokenizer.pad_token_id)
-
     model = initialize_model(vocab_size, emb_dim, hidden_size, bidirectional, n_layer, dropout, device)
     # wrap the model with DataParallel
     if torch.cuda.device_count() > 1:
         print(f"Using {torch.cuda.device_count()} GPUs")
         model = nn.DataParallel(model)
+    
+    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+    criterion = nn.CrossEntropyLoss(ignore_index=tokenizer.pad_token_id)
         
     data_directory = "/home1/s5734436/thesis-graph/cnn_dm4openie_extraction/article_collections_large" 
 
