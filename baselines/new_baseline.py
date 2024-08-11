@@ -177,16 +177,16 @@ def main():
     model_save_path = './best_model_baseline.pth'
     patience = 3   
 
+    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate) # define optimizerbefore initializing model
+    criterion = nn.CrossEntropyLoss(ignore_index=tokenizer.pad_token_id)
+
     model = initialize_model(vocab_size, emb_dim, hidden_size, bidirectional, n_layer, dropout, device)
     # wrap the model with DataParallel
     if torch.cuda.device_count() > 1:
         print(f"Using {torch.cuda.device_count()} GPUs")
         model = nn.DataParallel(model)
         
-    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
-    criterion = nn.CrossEntropyLoss(ignore_index=tokenizer.pad_token_id)
-
-    data_directory = "/home1/s5734436/thesis-graph/cnn_dm4openie_extraction/article_collections" 
+    data_directory = "/home1/s5734436/thesis-graph/cnn_dm4openie_extraction/article_collections_large" 
 
 
     train_data = open_json_file(data_directory, "train")
