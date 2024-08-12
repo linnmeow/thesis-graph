@@ -146,7 +146,7 @@ def initialize_model(hidden_size, output_size, device):
     model = Seq2Seq(encoder, decoder, device).to(device)
     return model
 
-def train_model(model, train_loader, val_loader, optimizer, criterion, num_epochs, device, log_dir, early_stopping_patience=3):
+def train_model(model, train_loader, val_loader, optimizer, criterion, num_epochs, device, log_dir, model_save_path, early_stopping_patience=1):
     writer = SummaryWriter(log_dir)
     best_val_loss = float('inf')
     epochs_no_improve = 0
@@ -192,8 +192,8 @@ def train_model(model, train_loader, val_loader, optimizer, criterion, num_epoch
         if avg_val_loss < best_val_loss:
             best_val_loss = avg_val_loss
             epochs_no_improve = 0
-            torch.save(model.state_dict(), os.path.join(log_dir, 'best_model.pth'))  # Save the best model
-            print("Validation loss improved, saving model...")
+            torch.save(model.state_dict(), os.path.join(model_save_path, 'best_model.pth'))  # Save the best model
+            print(f"Validation loss improved, saving model to {model_save_path}")
         else:
             epochs_no_improve += 1
             print(f"No improvement in validation loss for {epochs_no_improve} epoch(s)")
@@ -276,6 +276,8 @@ if __name__ == "__main__":
     num_epochs = 15
     learning_rate = 0.001
     batch_size = 8
+    patience = 1
+    model_save_path = './best_model_baseline.pth'
     log_dir = './logs'
 
     model = initialize_model(hidden_size, output_size, device)
@@ -300,8 +302,7 @@ if __name__ == "__main__":
     train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, collate_fn=data_collator)
     valid_dataloader = DataLoader(valid_dataset, batch_size=batch_size, shuffle=True, collate_fn=data_collator)
     test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True, collate_fn=data_collator)
-
-    train_model(model, train_dataloader, valid_dataloader, optimizer, criterion, num_epochs, device, log_dir)
+    train_model(model, train_dataloader, valid_dataloader, optimizer, criterion, num_epochs, device, log_dir, model_save_path, patience)
 
     output_file = os.path.join(data_directory, "generated_summaries.json")
     results = test_model(model, test_dataloader, tokenizer, device, output_file)
