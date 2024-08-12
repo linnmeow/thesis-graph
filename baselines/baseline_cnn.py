@@ -275,7 +275,7 @@ if __name__ == "__main__":
     output_size = tokenizer.vocab_size
     num_epochs = 15
     learning_rate = 0.001
-    batch_size = 16
+    batch_size = 8
     log_dir = './logs'
 
     model = initialize_model(hidden_size, output_size, device)
@@ -284,8 +284,6 @@ if __name__ == "__main__":
     if torch.cuda.device_count() > 1:
         print(f"Using {torch.cuda.device_count()} GPUs for training.")
         model = torch.nn.DataParallel(model)
-            
-    # model.to(device)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
     criterion = nn.CrossEntropyLoss(ignore_index=tokenizer.pad_token_id)
