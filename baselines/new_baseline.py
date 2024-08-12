@@ -132,7 +132,7 @@ def test_model(model, dataloader, tokenizer, device, output_file):
             art_lens = (attention_mask != 0).sum(dim=1).to(device)  # Calculate article lengths
 
             # Generate summaries
-            summary_tokens_batch, _ = model.batch_decode(input_ids, art_lens, tokenizer.cls_token_id, tokenizer.sep_token_id, max_len=512)
+            summary_tokens_batch, _ = model.batch_decode(input_ids, art_lens, tokenizer.cls_token_id, tokenizer.sep_token_id, max_len=50)
 
             # summary_tokens_batch has shape (max_len, batch_size)
             # Transpose to get (batch_size, max_len)
