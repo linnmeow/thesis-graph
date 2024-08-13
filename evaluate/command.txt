@@ -1,0 +1,1 @@
+python evaluator.py --data_dir /Users/lynn/desktop/thesis/cnn_dm4openie_extraction/article_collections  --file_prefix test --metric_name bert_score
