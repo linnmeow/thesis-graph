@@ -20,14 +20,15 @@ class CustomDataset(Dataset):
         article = self.data[idx]['article']
         highlights = self.data[idx]['highlights']
 
-        # tokenize inputs and outputs
         inputs = self.tokenizer(article, return_tensors='pt', max_length=self.max_length, padding='max_length', truncation=True)
         outputs = self.tokenizer(highlights, return_tensors='pt', max_length=self.max_length, padding='max_length', truncation=True)
 
         return {
             'input_ids': inputs['input_ids'].squeeze(),
             'attention_mask': inputs['attention_mask'].squeeze(),
-            'labels': outputs['input_ids'].squeeze()
+            'labels': outputs['input_ids'].squeeze(),
+            'article': article,
+            'highlights': highlights
         }
 
 def data_collator(features):
@@ -275,7 +276,7 @@ if __name__ == "__main__":
     output_size = tokenizer.vocab_size
     num_epochs = 15
     learning_rate = 0.001
-    batch_size = 8
+    batch_size = 2
     patience = 1
     model_save_path = './best_model_baseline.pth'
     log_dir = './logs'
@@ -290,7 +291,7 @@ if __name__ == "__main__":
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
     criterion = nn.CrossEntropyLoss(ignore_index=tokenizer.pad_token_id)
 
-    data_directory = "/home1/s5734436/thesis-graph/cnn_dm4openie_extraction/article_collections" 
+    data_directory = "/content/drive/MyDrive/cnn_dm4openie_extraction/article_collections_large" 
     train_data = open_json_file(data_directory, "train")
     valid_data = open_json_file(data_directory, "valid")
     test_data = open_json_file(data_directory, "test")
