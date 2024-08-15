@@ -6,6 +6,7 @@ import torch.nn.functional as F
 from torch.utils.data import Dataset, DataLoader
 from transformers import RobertaTokenizer, RobertaModel
 from torch.utils.tensorboard import SummaryWriter
+from koila import lazy
 
 class CustomDataset(Dataset):
     def __init__(self, data, tokenizer, max_length=512):
@@ -22,6 +23,8 @@ class CustomDataset(Dataset):
 
         inputs = self.tokenizer(article, return_tensors='pt', max_length=self.max_length, padding='max_length', truncation=True)
         outputs = self.tokenizer(highlights, return_tensors='pt', max_length=self.max_length, padding='max_length', truncation=True)
+
+        (inputs, outputs) = lazy(inputs, outputs, batch=0)
 
         return {
             'input_ids': inputs['input_ids'].squeeze(),
@@ -228,7 +231,7 @@ def test_model(model, dataloader, tokenizer, device, output_file):
         for batch_idx, batch in enumerate(dataloader):
             input_ids = batch['input_ids'].to(device)
             attention_mask = batch['attention_mask'].to(device)
-            target_summary = batch['labels']
+            # target_summary = batch['labels']
 
             summary_tokens = model.generate_summary(input_ids, attention_mask)
             generated_summary = tokenizer.decode(summary_tokens[0], skip_special_tokens=True)
@@ -278,8 +281,11 @@ if __name__ == "__main__":
     learning_rate = 0.001
     batch_size = 2
     patience = 1
-    model_save_path = './best_model_baseline.pth'
+    model_save_path = './model_checkpoints'
     log_dir = './logs'
+
+    if not os.path.exists(model_save_path):
+        os.makedirs(model_save_path)
 
     model = initialize_model(hidden_size, output_size, device)
     
@@ -291,7 +297,7 @@ if __name__ == "__main__":
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
     criterion = nn.CrossEntropyLoss(ignore_index=tokenizer.pad_token_id)
 
-    data_directory = "/content/drive/MyDrive/cnn_dm4openie_extraction/article_collections_large" 
+    data_directory = "/home1/s5734436/thesis-graph/cnn_dm4openie_extraction/article_collections_large" 
     train_data = open_json_file(data_directory, "train")
     valid_data = open_json_file(data_directory, "valid")
     test_data = open_json_file(data_directory, "test")
