@@ -1,7 +1,10 @@
 from transformers import T5ForConditionalGeneration, T5Tokenizer, BertForQuestionAnswering, BertTokenizer, pipeline
 import spacy
 import re
-from datasets import load_metric
+import re
+import string
+from collections import Counter
+from sklearn.metrics import f1_score
 from transformers import pipeline
 
 # load spaCy model for named entity recognition and noun phrase extraction
@@ -11,14 +14,6 @@ nlp = spacy.load('en_core_web_sm')
 t5_model_name = 'valhalla/t5-small-qg-hl'
 t5_model = T5ForConditionalGeneration.from_pretrained(t5_model_name)
 t5_tokenizer = T5Tokenizer.from_pretrained(t5_model_name)
-
-# # load BERT model and tokenizer for answer extraction
-# bert_model_name = 'bert-base-uncased'
-# bert_model = BertForQuestionAnswering.from_pretrained(bert_model_name)
-# bert_tokenizer = BertTokenizer.from_pretrained(bert_model_name)
-
-# load metric for F1 score computation
-f1_metric = load_metric("f1")
 
 def mask_entities_and_phrases(text):
     """
@@ -62,7 +57,7 @@ def generate_qa_pairs(questions, masked_sentence):
     """
     Generate QA pairs from the summary sentence.
     """
-    return [(q, masked_sentence.split('<hl> ')[1].split(' <hl>')[0]) for q in questions]
+    return [(q, masked_sentence.split('<hl> ')[1].split(' <hl>')[0].strip()) for q in questions]
 
 def get_answers_from_document(qa_pairs, document, model_name="deepset/roberta-base-squad2"):
     """
@@ -85,23 +80,64 @@ def get_answers_from_document(qa_pairs, document, model_name="deepset/roberta-ba
     
     return answers
 
+def normalize_answer(s):
+    """Lower text and remove punctuation, articles, and extra whitespace."""
+    def remove_articles(text):
+        return re.sub(r'\b(a|an|the)\b', ' ', text)
+
+    def remove_punctuation(text):
+        return text.translate(str.maketrans('', '', string.punctuation))
+
+    def lower(text):
+        return text.lower()
+
+    def remove_whitespace(text):
+        return ' '.join(text.split())
+
+    def normalize(text):
+        """Apply all normalization steps to a single string."""
+        return remove_whitespace(remove_articles(remove_punctuation(lower(text))))
+
+    # Check if the input is a list, if so, apply normalization to each element
+    if isinstance(s, list):
+        return [normalize(item) for item in s]
+    else:
+        return normalize(s)
+
 def compute_f1_score(predictions, references):
     """
     Compute F1 score for the given predictions and references.
+    Predictions and references are lists of strings.
     """
-    results = []
+    f1_scores = []
+    
     for pred, ref in zip(predictions, references):
-        results.append(f1_metric.compute(predictions=[pred], references=[ref]))
-
-    # averaging the F1 score results
-    avg_f1 = sum([result['f1'] for result in results]) / len(results)
+        # normalize the predicted and reference answers
+        pred_norm = normalize_answer(pred)
+        ref_norm = normalize_answer(ref)
+        
+        # convert strings to sets of tokens for F1 calculation
+        pred_tokens = set(pred_norm.split())
+        ref_tokens = set(ref_norm.split())
+        
+        # calculate precision and recall
+        common_tokens = pred_tokens.intersection(ref_tokens)
+        if len(common_tokens) == 0:
+            f1_scores.append(0)
+        else:
+            precision = len(common_tokens) / len(pred_tokens)
+            recall = len(common_tokens) / len(ref_tokens)
+            f1 = 2 * (precision * recall) / (precision + recall)
+            f1_scores.append(f1)
+    
+    # average the F1 score results
+    avg_f1 = sum(f1_scores) / len(f1_scores)
     return avg_f1
 
 def main():
     # Example sentence and document
-    summary_sentence = "Sally was born in 1958."
-    document = "Sally was born in 1958 in a small town, which was a remarkable event."
-
+    summary_sentence = "Sally was born in a small town."
+    document = "Sally was born in a small town. She grew up in a close-knit community and attended the local school. After graduating, she moved to the city to pursue her dreams."
     # Generate masked sentence
     masked_sentence = mask_entities_and_phrases(summary_sentence)
 
