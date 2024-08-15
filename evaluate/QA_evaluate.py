@@ -4,7 +4,7 @@ import re
 import re
 import string
 from collections import Counter
-from sklearn.metrics import f1_score
+from sklearn.metrics import precision_recall_fscore_support
 from transformers import pipeline
 
 # load spaCy model for named entity recognition and noun phrase extraction
@@ -106,33 +106,25 @@ def normalize_answer(s):
 
 def compute_f1_score(predictions, references):
     """
-    Compute F1 score for the given predictions and references.
-    Predictions and references are lists of strings.
+    Compute F1 score for the given predictions and references, considering token order.
+    Assumes predictions and references are lists of strings.
     """
-    f1_scores = []
+    all_preds = []
+    all_refs = []
     
     for pred, ref in zip(predictions, references):
-        # normalize the predicted and reference answers
-        pred_norm = normalize_answer(pred)
-        ref_norm = normalize_answer(ref)
+        # Normalize the predicted and reference answers
+        pred_tokens = normalize_answer(pred).split()
+        ref_tokens = normalize_answer(ref).split()
         
-        # convert strings to sets of tokens for F1 calculation
-        pred_tokens = set(pred_norm.split())
-        ref_tokens = set(ref_norm.split())
-        
-        # calculate precision and recall
-        common_tokens = pred_tokens.intersection(ref_tokens)
-        if len(common_tokens) == 0:
-            f1_scores.append(0)
-        else:
-            precision = len(common_tokens) / len(pred_tokens)
-            recall = len(common_tokens) / len(ref_tokens)
-            f1 = 2 * (precision * recall) / (precision + recall)
-            f1_scores.append(f1)
+        # Append tokens for F1 score computation
+        all_preds.extend(pred_tokens)
+        all_refs.extend(ref_tokens)
     
-    # average the F1 score results
-    avg_f1 = sum(f1_scores) / len(f1_scores)
-    return avg_f1
+    # Compute token-level precision, recall, and F1 score
+    precision, recall, f1, _ = precision_recall_fscore_support(all_refs, all_preds, average='macro', zero_division=0)
+    
+    return f1
 
 def main():
     # Example sentence and document
