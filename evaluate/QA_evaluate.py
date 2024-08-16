@@ -1,16 +1,13 @@
-from transformers import T5ForConditionalGeneration, T5Tokenizer, BertForQuestionAnswering, BertTokenizer, pipeline
+from transformers import T5ForConditionalGeneration, T5Tokenizer, pipeline
 import spacy
 import re
-import re
 import string
-from collections import Counter
 from sklearn.metrics import precision_recall_fscore_support
-from transformers import pipeline
 
-# load spaCy model for named entity recognition and noun phrase extraction
+# Load spaCy model for named entity recognition and noun phrase extraction
 nlp = spacy.load('en_core_web_sm')
 
-# load T5 model and tokenizer for question generation
+# Load T5 model and tokenizer for question generation
 t5_model_name = 'valhalla/t5-small-qg-hl'
 t5_model = T5ForConditionalGeneration.from_pretrained(t5_model_name)
 t5_tokenizer = T5Tokenizer.from_pretrained(t5_model_name)
@@ -98,7 +95,7 @@ def normalize_answer(s):
         """Apply all normalization steps to a single string."""
         return remove_whitespace(remove_articles(remove_punctuation(lower(text))))
 
-    # Check if the input is a list, if so, apply normalization to each element
+    # check if the input is a list, if so, apply normalization to each element
     if isinstance(s, list):
         return [normalize(item) for item in s]
     else:
@@ -113,46 +110,55 @@ def compute_f1_score(predictions, references):
     all_refs = []
     
     for pred, ref in zip(predictions, references):
-        # Normalize the predicted and reference answers
+        # normalize the predicted and reference answers
         pred_tokens = normalize_answer(pred).split()
         ref_tokens = normalize_answer(ref).split()
         
-        # Append tokens for F1 score computation
+        # append tokens for F1 score computation
         all_preds.extend(pred_tokens)
         all_refs.extend(ref_tokens)
     
-    # Compute token-level precision, recall, and F1 score
+    # compute token-level precision, recall, and F1 score
     precision, recall, f1, _ = precision_recall_fscore_support(all_refs, all_preds, average='macro', zero_division=0)
     
     return f1
 
 def main():
-    # Example sentence and document
-    summary_sentence = "Sally was born in a small town."
+    summary_text = "Sally was born in a small town. Sally moved to the city after graduating."
     document = "Sally was born in a small town. She grew up in a close-knit community and attended the local school. After graduating, she moved to the city to pursue her dreams."
-    # Generate masked sentence
-    masked_sentence = mask_entities_and_phrases(summary_sentence)
 
-    # Generate questions
-    questions = generate_questions(masked_sentence)
+    # split the summary text into individual sentences
+    summary_sentences = summary_text.split('. ')
+    if summary_sentences[-1].endswith('.'):
+        summary_sentences[-1] = summary_sentences[-1][:-1]  # Remove the trailing period from the last sentence
 
-    # Generate QA pairs
-    qa_pairs = generate_qa_pairs(questions, masked_sentence)
+    all_qa_pairs = []
+    all_gold_answers = []
+    all_predictions = []
 
-    # Get answers from the document
-    predictions = get_answers_from_document(qa_pairs, document)
+    for sentence in summary_sentences:
+        # Generate masked sentence
+        masked_sentence = mask_entities_and_phrases(sentence)
 
-    # Define the "gold" answers
-    gold_answers = [answer for _, answer in qa_pairs]
+        # Generate questions
+        questions = generate_questions(masked_sentence)
+
+        # Generate QA pairs
+        qa_pairs = generate_qa_pairs(questions, masked_sentence)
+
+        # Extract answers from the document
+        answers = get_answers_from_document(qa_pairs, document)
+
+        all_qa_pairs.extend(qa_pairs)
+        all_gold_answers.extend([answer for _, answer in qa_pairs])
+        all_predictions.extend(answers)
 
     # Compute the F1 score
-    f1_score = compute_f1_score(predictions, gold_answers)
+    f1_score = compute_f1_score(all_predictions, all_gold_answers)
 
-    print("Masked Sentence:", masked_sentence)
-    print("Generated Questions:", questions)
-    print("Generated QA Pairs:", qa_pairs)
-    print("Predictions:", predictions)
-    print("Gold Answers:", gold_answers)
+    print("All QA Pairs:", all_qa_pairs)
+    print("All Gold Answers:", all_gold_answers)
+    print("Predictions:", all_predictions)
     print("F1 Score:", f1_score)
 
 if __name__ == "__main__":
