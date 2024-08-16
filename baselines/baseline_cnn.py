@@ -136,13 +136,17 @@ class Seq2Seq(nn.Module):
             summary_tokens = []
             for _ in range(max_length):
                 output, hidden_state = self.decoder(decoder_input, hidden_state, document_output, document_mask)
-                summary_tokens.append(output.argmax(dim=1).unsqueeze(1))
-
-                decoder_input = output
+                
+                # Get the predicted token (output is of size [batch_size, output_size])
+                predicted_token_id = output.argmax(dim=1)
+                summary_tokens.append(predicted_token_id.unsqueeze(1))
+                
+                # Convert the predicted token ID into an embedding for the next LSTM input
+                decoder_input = self.encoder.roberta.embeddings.word_embeddings(predicted_token_id)
 
             summary_tokens = torch.cat(summary_tokens, dim=1)
         return summary_tokens
-
+    
 def initialize_model(hidden_size, output_size, device):
     print("Initializing model...")
     encoder = DocumentEncoder('roberta-base', hidden_size).to(device)
