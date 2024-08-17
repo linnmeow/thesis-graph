@@ -59,23 +59,16 @@ class DocumentEncoder(nn.Module):
         lstm_output, _ = self.bilstm(last_hidden_states)
         
         return lstm_output, attention_mask
-    
-class SummaryDecoder(nn.Module):
-    def __init__(self, hidden_size, output_size):
-        super(SummaryDecoder, self).__init__()
+
+class BahdanauAttention(nn.Module):
+    def __init__(self, hidden_size):
+        super(BahdanauAttention, self).__init__()
         self.hidden_size = hidden_size
-        self.output_size = output_size
-        self.lstm = nn.LSTM(hidden_size, hidden_size, num_layers=1)
         self.Wa = nn.Linear(hidden_size, hidden_size)  # Transformation for decoder hidden state
         self.Ua = nn.Linear(hidden_size, hidden_size)  # Transformation for encoder outputs
         self.Va = nn.Linear(hidden_size, 1)  # Scoring linear layer
 
-        self.Wout = nn.Linear(hidden_size * 2, output_size)
-
-    def forward(self, input_token, hidden_state, document_output, document_mask):
-        # LSTM processing
-        lstm_output, hidden_state = self.lstm(input_token.unsqueeze(1), hidden_state)
-
+    def forward(self, lstm_output, document_output, document_mask):
         # Transformations for Bahdanau attention
         transformed_lstm_output = self.Wa(lstm_output)  # shape: [batch_size, 1, hidden_size]
         transformed_document_output = self.Ua(document_output)  # shape: [batch_size, seq_len, hidden_size]
@@ -93,48 +86,29 @@ class SummaryDecoder(nn.Module):
         context_vector = torch.bmm(attention_weights.unsqueeze(1), document_output)  # shape: [batch_size, 1, hidden_size]
         context_vector = context_vector.squeeze(1)  # shape: [batch_size, hidden_size]
 
+        return context_vector, attention_weights
+
+class SummaryDecoder(nn.Module):
+    def __init__(self, hidden_size, output_size):
+        super(SummaryDecoder, self).__init__()
+        self.hidden_size = hidden_size
+        self.output_size = output_size
+        self.lstm = nn.LSTM(hidden_size, hidden_size, num_layers=1)
+        self.attention = BahdanauAttention(hidden_size)  # Use the new BahdanauAttention class
+        self.Wout = nn.Linear(hidden_size * 2, output_size)
+
+    def forward(self, input_token, hidden_state, document_output, document_mask):
+        # LSTM processing
+        lstm_output, hidden_state = self.lstm(input_token.unsqueeze(1), hidden_state)
+
+        # Attention mechanism
+        context_vector, attention_weights = self.attention(lstm_output, document_output, document_mask)
+
         # Combine LSTM output with document context vector
         combined_context = torch.cat((lstm_output.squeeze(1), context_vector), dim=1)  # shape: [batch_size, hidden_size * 2]
         output = self.Wout(combined_context)  # shape: [batch_size, output_size]
 
         return output, hidden_state
-
-# class SummaryDecoderOld(nn.Module):
-#     def __init__(self, hidden_size, output_size):
-#         super(SummaryDecoder, self).__init__()
-#         self.hidden_size = hidden_size
-#         self.output_size = output_size
-#         self.lstm = nn.LSTM(hidden_size, hidden_size, num_layers=1)
-#         self.W1 = nn.Linear(hidden_size, hidden_size) # transformation for decoder hidden state
-#         self.W2 = nn.Linear(hidden_size, hidden_size) # transformation for document encoder output
-#         self.u1 = nn.Parameter(torch.randn(hidden_size))
-#         self.Wout = nn.Linear(hidden_size * 2, output_size)
-
-#     def forward(self, input_token, hidden_state, document_output, document_mask):
-#         # lstm processing
-#         lstm_output, hidden_state = self.lstm(input_token.unsqueeze(1), hidden_state)
-
-#         # expand lstm output to match the shape of document output
-#         lstm_output_tiled = lstm_output.expand(-1, document_output.size(1), -1) # batch_size, 1, hidden_size -> batch_size, seq_len, hidden_size
-#         # attention mechanism over document encoder outputs
-#         transformed_lstm_output = self.W1(lstm_output_tiled)  # shape: [batch_size, seq_len, hidden_size]
-#         transformed_document_output = self.W2(document_output)  # shape: [batch_size, seq_len, hidden_size]
-  
-#         # combine and apply non-linear activation
-#         combined = torch.tanh(transformed_lstm_output + transformed_document_output)  # shape: [batch_size, seq_len, hidden_size]
-#         # project to scalar with u1
-#         document_scores = torch.matmul(combined, self.u1)  # shape: [batch_size, seq_len]
-#         # mask the scores and calculate attention weights
-#         document_scores = document_scores.masked_fill(~document_mask.bool(), float('-inf')) # shape: [batch_size, seq_len]
-#         document_attention_weights = F.softmax(document_scores, dim=1) # shape: [batch_size, seq_len]
-#         # compute the context vector 
-#         document_context_vector = torch.sum(document_attention_weights.unsqueeze(2) * document_output, dim=1)  # shape: [batch_size, hidden_size]    
-
-#         # combine LSTM output with document context vector
-#         combined_context = torch.cat((lstm_output.squeeze(1), document_context_vector), dim=1) # shape: [batch_size, hidden_size * 2]
-#         output = self.Wout(combined_context) # shape: [batch_size, output_size]
-
-#         return output, hidden_state
 
 class Seq2Seq(nn.Module):
     def __init__(self, encoder, decoder, device):
@@ -153,10 +127,20 @@ class Seq2Seq(nn.Module):
         hidden_state = None
 
         outputs = []
- 
+        use_teacher_forcing = True if torch.rand(1).item() < teacher_forcing_ratio else False
+
         for t in range(target_summary.size(1)):
             output, hidden_state = self.decoder(decoder_input, hidden_state, document_output, document_mask)
             outputs.append(output.unsqueeze(1))  # append the decoder's output for the current time step to the list of outputs
+
+            # Decide whether to use teacher forcing
+            if use_teacher_forcing:
+                # Use the actual next token from the target summary as the next input
+                decoder_input = self.encoder.roberta.embeddings.word_embeddings(target_summary[:, t])
+            else:
+                # Use the predicted token from the decoder as the next input
+                predicted_token_id = output.argmax(dim=1)
+                decoder_input = self.encoder.roberta.embeddings.word_embeddings(predicted_token_id)
 
         outputs = torch.cat(outputs, dim=1)
         return outputs
