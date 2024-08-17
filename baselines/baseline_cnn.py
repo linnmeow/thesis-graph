@@ -274,18 +274,20 @@ def test_model(model, dataloader, tokenizer, device, output_file):
         for batch_idx, batch in enumerate(dataloader):
             input_ids = batch['input_ids'].to(device)
             attention_mask = batch['attention_mask'].to(device)
-            # target_summary = batch['labels']
 
+            # generate the summary for each article in the batch
             summary_tokens = model.generate_summary(input_ids, attention_mask)
-            generated_summary = tokenizer.decode(summary_tokens[0], skip_special_tokens=True)
+            
+            for i in range(input_ids.size(0)):  # iterate over each example in the batch
+                generated_summary = tokenizer.decode(summary_tokens[i], skip_special_tokens=True)
+                reference_summary = batch['highlights'][i]  # get the corresponding reference summary
+                source_text = batch['article'][i]  # get the corresponding article text
 
-            reference_summary = batch['highlights'][i]
-            source_text = batch['article'][i]
-            results.append({
-                'source_text': source_text,
-                'generated_summary': generated_summary,
-                'reference_summary': reference_summary
-            })
+                results.append({
+                    'source_text': source_text,
+                    'generated_summary': generated_summary,
+                    'reference_summary': reference_summary
+                })
 
             if batch_idx % 100 == 0:  # print every 100 batches
                 print(f"Batch {batch_idx+1}/{len(dataloader)} processed.")
