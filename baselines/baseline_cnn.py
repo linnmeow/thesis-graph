@@ -133,12 +133,12 @@ class Seq2Seq(nn.Module):
             output, hidden_state = self.decoder(decoder_input, hidden_state, document_output, document_mask)
             outputs.append(output.unsqueeze(1))  # append the decoder's output for the current time step to the list of outputs
 
-            # Decide whether to use teacher forcing
+            # decide whether to use teacher forcing
             if use_teacher_forcing:
-                # Use the actual next token from the target summary as the next input
+                # use the actual next token from the target summary as the next input
                 decoder_input = self.encoder.roberta.embeddings.word_embeddings(target_summary[:, t])
             else:
-                # Use the predicted token from the decoder as the next input
+                # use the predicted token from the decoder as the next input
                 predicted_token_id = output.argmax(dim=1)
                 decoder_input = self.encoder.roberta.embeddings.word_embeddings(predicted_token_id)
 
@@ -219,7 +219,7 @@ def train_model(model, train_loader, val_loader, optimizer, criterion, num_epoch
         
         print(f'Epoch {epoch+1}, Train Loss: {avg_train_loss:.4f}, Validation Loss: {avg_val_loss:.4f}')
 
-        # Early stopping
+        # early stopping
         if avg_val_loss < best_val_loss:
             best_val_loss = avg_val_loss
             epochs_no_improve = 0
@@ -307,9 +307,9 @@ if __name__ == "__main__":
     tokenizer = RobertaTokenizer.from_pretrained('roberta-base')
     output_size = tokenizer.vocab_size
     num_epochs = 15
-    learning_rate = 0.001
+    learning_rate = 0.0001
     batch_size = 2
-    patience = 1
+    patience = 3
     model_save_path = './model_checkpoints'
     log_dir = './logs'
 
