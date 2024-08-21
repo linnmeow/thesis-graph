@@ -147,7 +147,8 @@ def test_model(model, dataloader, tokenizer, device, output_file):
             input_ids = batch['input_ids'].to(device)
             attention_mask = batch['attention_mask'].to(device)
 
-            summary_tokens = model.generate_summary(input_ids, attention_mask)
+            # check if model is wrapped in DataParallel
+            summary_tokens = model.module.generate_summary(input_ids, attention_mask) if hasattr(model, 'module') else model.generate_summary(input_ids, attention_mask)
             
             for i in range(input_ids.size(0)):
                 generated_summary = tokenizer.decode(summary_tokens[i], skip_special_tokens=True)
