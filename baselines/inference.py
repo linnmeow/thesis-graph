@@ -1,12 +1,11 @@
 import os
 import json
 import torch
-from torch.utils.data import Dataset, DataLoader
-from transformers import RobertaTokenizer
-from koila import lazy
-from baseline_cnn import DocumentEncoder, SummaryDecoder, Seq2Seq  
+from torch.utils.data import DataLoader
+from transformers import BartForConditionalGeneration, BartTokenizer
+from torch.utils.data import Dataset
 
-class CustomDataset(Dataset):
+class CNN_DM(Dataset):
     def __init__(self, data, tokenizer, max_length=512):
         self.data = data
         self.tokenizer = tokenizer
@@ -21,8 +20,6 @@ class CustomDataset(Dataset):
 
         inputs = self.tokenizer(article, return_tensors='pt', max_length=self.max_length, padding='max_length', truncation=True)
         outputs = self.tokenizer(highlights, return_tensors='pt', max_length=self.max_length, padding='max_length', truncation=True)
-
-        (inputs, outputs) = lazy(inputs, outputs, batch=0)
 
         return {
             'input_ids': inputs['input_ids'].squeeze(),
@@ -41,18 +38,14 @@ def data_collator(features):
     batch['highlights'] = [f['highlights'] for f in features]
     return batch
 
-def load_trained_model(hidden_size, output_size, device, model_path):
-    """Load the trained model from the checkpoint."""
-    print(f"Loading model from {model_path}...")
-    encoder = DocumentEncoder('roberta-base', hidden_size).to(device)
-    decoder = SummaryDecoder(hidden_size, output_size).to(device)
-    model = Seq2Seq(encoder, decoder, device).to(device)
-    model.load_state_dict(torch.load(model_path, map_location=device))
+def load_trained_model(model_path, bart_model_name, device):
+    model = BartForConditionalGeneration.from_pretrained(bart_model_name)
+    model.load_state_dict(torch.load(model_path, map_location=device), strict=False)  # Use strict=False
+    model.to(device)
     model.eval()
     return model
 
-def test_model(model, dataloader, tokenizer, device, output_file):
-    """Test the model and save the generated summaries."""
+def generate_summaries(model, dataloader, tokenizer, device, output_file):
     model.eval()
     results = []
     with torch.no_grad():
@@ -60,24 +53,30 @@ def test_model(model, dataloader, tokenizer, device, output_file):
             input_ids = batch['input_ids'].to(device)
             attention_mask = batch['attention_mask'].to(device)
 
-            # Generate summaries
-            summary_tokens = model.generate_summary(input_ids, attention_mask)
-            generated_summary = tokenizer.decode(summary_tokens[0], skip_special_tokens=True)
-
-            # Collect the results
+            summary_tokens = model.generate(
+                input_ids=input_ids,
+                attention_mask=attention_mask,
+                num_beams=4,
+                min_length=56,
+                max_length=142,
+                no_repeat_ngram_size=3,
+                early_stopping=True
+            )
+            
             for i in range(input_ids.size(0)):
+                generated_summary = tokenizer.decode(summary_tokens[i], skip_special_tokens=True)
                 reference_summary = batch['highlights'][i]
                 source_text = batch['article'][i]
+
                 results.append({
                     'source_text': source_text,
                     'generated_summary': generated_summary,
                     'reference_summary': reference_summary
                 })
 
-            if batch_idx % 100 == 0:  # Print every 100 batches
+            if batch_idx % 100 == 0:
                 print(f"Batch {batch_idx+1}/{len(dataloader)} processed.")
 
-    # Save the results to a file
     with open(output_file, 'w') as f:
         json.dump(results, f, indent=4)
 
@@ -93,22 +92,21 @@ def open_json_file(data_dir, file_prefix):
 if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
-    hidden_size = 768
-    tokenizer = RobertaTokenizer.from_pretrained('roberta-base')
-    output_size = tokenizer.vocab_size
+    
+    bart_model_name = 'facebook/bart-large'
+    tokenizer = BartTokenizer.from_pretrained(bart_model_name)
+    
+    model_save_path = '/local/linye/thesis-graph/baselines/model_checkpoints/best_model.pth'
+    data_directory = "/local/linye/thesis-graph/cnn_dm4openie_extraction/article_collections_large/"
+    output_file = os.path.join(data_directory, "generated_summaries.json")
 
-    model_path = '/home1/s5734436/model_checkpoints/best_model.pth'  
-    data_directory = "/home1/s5734436/thesis-graph/cnn_dm4openie_extraction/article_collections_large"  
-
-    # Load the trained model
-    model = load_trained_model(hidden_size, output_size, device, model_path)
+    model = load_trained_model(model_save_path, bart_model_name, device)
 
     test_data = open_json_file(data_directory, "test")
-    test_dataset = CustomDataset(test_data, tokenizer)
-    test_dataloader = DataLoader(test_dataset, batch_size=2, shuffle=False, collate_fn=data_collator)
+    test_dataset = CNN_DM(test_data, tokenizer)
+    test_dataloader = DataLoader(test_dataset, batch_size=4, shuffle=False, collate_fn=data_collator)
 
-    output_file = os.path.join(data_directory, "generated_summaries.json")
-    results = test_model(model, test_dataloader, tokenizer, device, output_file)
+    results = generate_summaries(model, test_dataloader, tokenizer, device, output_file)
 
     for i in range(5):
         print(f"Generated Summary {i+1}: {results[i]['generated_summary']}")
