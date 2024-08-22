@@ -55,14 +55,14 @@ class Seq2SeqModel(nn.Module):
             use_cache=False
         )
 
-    def generate_summary(self, input_ids, attention_mask, num_beams=4, min_length=56, max_length=142):
+    def generate_summary(self, input_ids, attention_mask, num_beams, min_length, max_length, no_repeat_ngram_size):
         return self.model.generate(
             input_ids=input_ids,
             attention_mask=attention_mask,
             num_beams=num_beams,
             min_length=min_length,
             max_length=max_length,
-            no_repeat_ngram_size=3,
+            no_repeat_ngram_size=no_repeat_ngram_size,
             early_stopping=True
         )
 
@@ -139,7 +139,7 @@ def validate_model(model, dataloader, criterion, device):
     avg_loss = total_loss / len(dataloader)
     return avg_loss
 
-def test_model(model, dataloader, tokenizer, device, output_file):
+def test_model(model, dataloader, tokenizer, device, output_file, num_beams, min_length, max_length, no_repeat_ngram_size):
     model.eval()
     results = []
     with torch.no_grad():
@@ -148,7 +148,7 @@ def test_model(model, dataloader, tokenizer, device, output_file):
             attention_mask = batch['attention_mask'].to(device)
 
             # check if model is wrapped in DataParallel
-            summary_tokens = model.module.generate_summary(input_ids, attention_mask) if hasattr(model, 'module') else model.generate_summary(input_ids, attention_mask)
+            summary_tokens = model.module.generate_summary(input_ids, attention_mask, num_beams, min_length, max_length, no_repeat_ngram_size) if hasattr(model, 'module') else model.generate_summary(input_ids, attention_mask, input_ids, attention_mask, num_beams, min_length, max_length, no_repeat_ngram_size)
             
             for i in range(input_ids.size(0)):
                 generated_summary = tokenizer.decode(summary_tokens[i], skip_special_tokens=True)
@@ -190,6 +190,12 @@ if __name__ == "__main__":
     model_save_path = './model_checkpoints'
     log_dir = './logs'
 
+    # hyperparameters for decoding
+    num_beams = 4
+    min_length = 56
+    max_length = 142
+    no_repeat_ngram_size = 3
+
     if not os.path.exists(model_save_path):
         os.makedirs(model_save_path)
 
@@ -218,7 +224,7 @@ if __name__ == "__main__":
     train_model(model, train_dataloader, valid_dataloader, optimizer, criterion, num_epochs, device, log_dir, model_save_path, patience)
 
     output_file = os.path.join(data_directory, "generated_summaries.json")
-    results = test_model(model, test_dataloader, tokenizer, device, output_file)
+    results = test_model(model, test_dataloader, tokenizer, device, output_file, num_beams, min_length, max_length, no_repeat_ngram_size)
 
     for i in range(5):
         print(f"Generated Summary {i+1}: {results[i]['generated_summary']}")
