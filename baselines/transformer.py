@@ -10,7 +10,7 @@ from torch.cuda.amp import GradScaler, autocast
 
 
 class CNN_DM(Dataset):
-    def __init__(self, data, tokenizer, max_length=512):
+    def __init__(self, data, tokenizer, max_length=1024):
         self.data = data
         self.tokenizer = tokenizer
         self.max_length = max_length
@@ -108,7 +108,7 @@ def train_model(model, train_loader, val_loader, optimizer, criterion, num_epoch
         if avg_val_loss < best_val_loss:
             best_val_loss = avg_val_loss
             epochs_no_improve = 0
-            torch.save(model.state_dict(), os.path.join(model_save_path, 'best_model.pth'))
+            torch.save(model.state_dict(), os.path.join(model_save_path, 'best_model1.pth'))
             print(f"Validation loss improved, saving model to {model_save_path}")
         else:
             epochs_no_improve += 1
@@ -186,14 +186,14 @@ if __name__ == "__main__":
     num_epochs = 15
     learning_rate = 0.0001
     batch_size = 4
-    patience = 3
+    patience = 2
     model_save_path = './model_checkpoints'
     log_dir = './logs'
 
     # hyperparameters for decoding
     num_beams = 4
-    min_length = 56
-    max_length = 142
+    min_length = 7
+    max_length = 436
     no_repeat_ngram_size = 3
 
     if not os.path.exists(model_save_path):
@@ -208,7 +208,7 @@ if __name__ == "__main__":
     optimizer = optim.AdamW(model.parameters(), lr=learning_rate)
     criterion = nn.CrossEntropyLoss(ignore_index=tokenizer.pad_token_id)
 
-    data_directory = "/content/drive/MyDrive/cnn_dm4openie_extraction/article_collections_large/"
+    data_directory = "/local/linye/thesis-graph/cnn_dm4openie_extraction/article_collections_large/"
     train_data = open_json_file(data_directory, "train")
     valid_data = open_json_file(data_directory, "valid")
     test_data = open_json_file(data_directory, "test")
