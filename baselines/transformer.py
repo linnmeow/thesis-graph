@@ -32,6 +32,30 @@ class CNN_DM(Dataset):
             'article': article,
             'highlights': highlights
         }
+    
+class XSum(Dataset):
+    def __init__(self, data, tokenizer, max_length=1024):
+        self.data = data
+        self.tokenizer = tokenizer
+        self.max_length = max_length
+
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, idx):
+        document = self.data[idx]['document']
+        summary = self.data[idx]['summary']
+
+        inputs = self.tokenizer(document, return_tensors='pt', max_length=self.max_length, padding='max_length', truncation=True)
+        outputs = self.tokenizer(summary, return_tensors='pt', max_length=self.max_length, padding='max_length', truncation=True)
+
+        return {
+            'input_ids': inputs['input_ids'].squeeze(),
+            'attention_mask': inputs['attention_mask'].squeeze(),
+            'labels': outputs['input_ids'].squeeze(),
+            'document': document,
+            'summary': summary
+        }
 
 def data_collator(features):
     batch = {}
@@ -213,9 +237,13 @@ if __name__ == "__main__":
     valid_data = open_json_file(data_directory, "valid")
     test_data = open_json_file(data_directory, "test")
 
-    train_dataset = CNN_DM(train_data, tokenizer)
-    valid_dataset = CNN_DM(valid_data, tokenizer)
-    test_dataset = CNN_DM(test_data, tokenizer)
+    # train_dataset = CNN_DM(train_data, tokenizer)
+    # valid_dataset = CNN_DM(valid_data, tokenizer)
+    # test_dataset = CNN_DM(test_data, tokenizer)
+
+    train_dataset = XSum(train_data, tokenizer)
+    valid_dataset = XSum(valid_data, tokenizer)
+    test_dataset = XSum(test_data, tokenizer)
 
     train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, collate_fn=data_collator)
     valid_dataloader = DataLoader(valid_dataset, batch_size=batch_size, shuffle=False, collate_fn=data_collator)
