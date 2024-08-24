@@ -62,8 +62,15 @@ def data_collator(features):
     batch['input_ids'] = torch.stack([f['input_ids'] for f in features])
     batch['attention_mask'] = torch.stack([f['attention_mask'] for f in features])
     batch['labels'] = torch.stack([f['labels'] for f in features])
-    batch['article'] = [f['article'] for f in features]
-    batch['highlights'] = [f['highlights'] for f in features]
+
+    # handle either 'article'/'document' and 'highlights'/'summary' based on dataset
+    if 'article' in features[0]:
+        batch['article'] = [f['article'] for f in features]
+        batch['highlights'] = [f['highlights'] for f in features]
+    elif 'document' in features[0]:
+        batch['document'] = [f['document'] for f in features]
+        batch['summary'] = [f['summary'] for f in features]
+    
     return batch
 
 class Seq2SeqModel(nn.Module):
@@ -176,8 +183,14 @@ def test_model(model, dataloader, tokenizer, device, output_file, num_beams, min
             
             for i in range(input_ids.size(0)):
                 generated_summary = tokenizer.decode(summary_tokens[i], skip_special_tokens=True)
-                reference_summary = batch['highlights'][i]
-                source_text = batch['article'][i]
+                
+                # get reference summary and source text for CNN/DM dataset
+                # reference_summary = batch['highlights'][i]
+                # source_text = batch['article'][i]
+
+                # get reference summary and source text for XSum dataset
+                reference_summary = batch['summary'][i]
+                source_text = batch['document'][i]
 
                 results.append({
                     'source_text': source_text,
@@ -215,9 +228,10 @@ if __name__ == "__main__":
     log_dir = './logs'
 
     # hyperparameters for decoding
+    # summary range cnn_dm: 7-436, xsum: 1-110
     num_beams = 4
-    min_length = 7
-    max_length = 436
+    min_length = 1
+    max_length = 110
     no_repeat_ngram_size = 3
 
     if not os.path.exists(model_save_path):
@@ -232,7 +246,7 @@ if __name__ == "__main__":
     optimizer = optim.AdamW(model.parameters(), lr=learning_rate)
     criterion = nn.CrossEntropyLoss(ignore_index=tokenizer.pad_token_id)
 
-    data_directory = "/local/linye/thesis-graph/cnn_dm4openie_extraction/article_collections_large/"
+    data_directory = "/content/drive/MyDrive/Xsum/article_collections/"
     train_data = open_json_file(data_directory, "train")
     valid_data = open_json_file(data_directory, "valid")
     test_data = open_json_file(data_directory, "test")
