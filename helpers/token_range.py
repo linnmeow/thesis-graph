@@ -2,6 +2,7 @@ import json
 import os
 from transformers import AutoTokenizer
 import argparse
+from collections import Counter
 
 def token_count_range(directory, model_name): 
     files = ["train_article.json", "test_article.json", "valid_article.json"]
@@ -21,17 +22,17 @@ def token_count_range(directory, model_name):
             data = json.load(file)
             for item in data:
                 # cnn/dm
-                # document = item.get("article", "") 
-                # summary = item.get("highlights", "") 
+                document = item.get("article", "") 
+                summary = item.get("highlights", "") 
 
                 # xsum
-                document = item.get("document", "") 
-                summary = item.get("summary", "") 
-                index = item.get("id", "")
+                # document = item.get("document", "") 
+                # summary = item.get("summary", "") 
+                # index = item.get("id", "")
 
                 # check if the document or summary is empty and print the filename and index
                 if not document or not summary:
-                    print(f"Empty document or summary found in file {filename} at index {index}")
+                    print(f"Empty document or summary found in file {filename}")
                     continue
                 
                 # tokenize the document and summary
@@ -58,10 +59,32 @@ def token_count_range(directory, model_name):
     document_token_range = (min(document_token_counts), max(document_token_counts)) if document_token_counts else (0, 0)
     summary_token_range = (min(summary_token_counts), max(summary_token_counts)) if summary_token_counts else (0, 0)
 
-    return {"document_token_range": document_token_range, "summary_token_range": summary_token_range}
+    # compute token length distribution
+    def compute_distribution(token_counts):
+        distribution = Counter()
+        for count in token_counts:
+            if count <= 512:
+                distribution['0-512'] += 1
+            elif count <= 768:
+                distribution['513-768'] += 1
+            elif count <= 1024:
+                distribution['769-1024'] += 1
+            else:
+                distribution['1025+'] += 1
+        return distribution
+    
+    document_token_distribution = compute_distribution(document_token_counts)
+    summary_token_distribution = compute_distribution(summary_token_counts)
+
+    return {
+        "document_token_range": document_token_range,
+        "summary_token_range": summary_token_range,
+        "document_token_distribution": document_token_distribution,
+        "summary_token_distribution": summary_token_distribution
+    }
 
 def main():
-    parser = argparse.ArgumentParser(description="Process JSON files to calculate token ranges.")
+    parser = argparse.ArgumentParser(description="Process JSON files to calculate token ranges and distributions.")
     parser.add_argument('directory', type=str, help="Directory containing JSON files")
     
     args = parser.parse_args()
@@ -71,6 +94,8 @@ def main():
     
     print(f"Document Token Range: {token_ranges['document_token_range']}")
     print(f"Summary Token Range: {token_ranges['summary_token_range']}")
+    print(f"Document Token Distribution: {token_ranges['document_token_distribution']}")
+    print(f"Summary Token Distribution: {token_ranges['summary_token_distribution']}")
 
 if __name__ == "__main__":
     main()
