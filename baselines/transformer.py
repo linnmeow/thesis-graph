@@ -7,6 +7,7 @@ from torch.utils.data import DataLoader, Dataset
 from transformers import BartForConditionalGeneration, BartTokenizer
 from torch.utils.tensorboard import SummaryWriter
 from torch.cuda.amp import GradScaler, autocast
+from peft import get_peft_model, LoraConfig, TaskType
 
 
 class CNN_DM(Dataset):
@@ -78,7 +79,19 @@ class Seq2SeqModel(nn.Module):
         super(Seq2SeqModel, self).__init__()
         self.model = BartForConditionalGeneration.from_pretrained(bart_model_name)
 
-    def forward(self, input_ids, attention_mask, labels):
+        # LoRA configuration
+        lora_config = LoraConfig(
+            task_type=TaskType.SEQ_2_SEQ_LM,  # Task type
+            r=16,  # Rank of LoRA update matrices
+            lora_alpha=32,  # Scaling factor for LoRA updates
+            lora_dropout=0.1,  # Dropout probability for LoRA layers
+            target_modules=["q_proj", "v_proj"]  # Modules to which LoRA applies
+        )
+
+        # wrap the model with LoRA
+        self.model = get_peft_model(self.model, lora_config)
+
+    def forward(self, input_ids, attention_mask, labels=None):
         return self.model(
             input_ids=input_ids,
             attention_mask=attention_mask,
@@ -116,7 +129,8 @@ def train_model(model, train_loader, val_loader, optimizer, criterion, num_epoch
             optimizer.zero_grad()
 
             with autocast():
-                outputs = model(input_ids, attention_mask, labels)
+                # pass the labels to the model for teacher forcing
+                outputs = model(input_ids, attention_mask, labels=labels)
                 loss = criterion(outputs.logits.view(-1, outputs.logits.size(-1)), labels.view(-1))
 
             scaler.scale(loss).backward()
@@ -220,18 +234,20 @@ if __name__ == "__main__":
     bart_model_name = 'facebook/bart-large'
     tokenizer = BartTokenizer.from_pretrained(bart_model_name)
     
-    num_epochs = 15
-    learning_rate = 0.0001
+    num_epochs = 8
+    learning_rate = 0.00005
     batch_size = 4
     patience = 2
     model_save_path = './model_checkpoints'
     log_dir = './logs'
 
     # hyperparameters for decoding
-    # summary range cnn_dm: 7-436, xsum: 1-110
-    num_beams = 4
+    # summary range cnn_dm: 9-751, xsum: 1-90
+    # num_beams = 4 (cnn_dm), 6 (xsum)
+    
+    num_beams = 6
     min_length = 1
-    max_length = 110
+    max_length = 90
     no_repeat_ngram_size = 3
 
     if not os.path.exists(model_save_path):
@@ -243,10 +259,10 @@ if __name__ == "__main__":
         print(f"Using {torch.cuda.device_count()} GPUs for training.")
         model = nn.DataParallel(model)
 
-    optimizer = optim.AdamW(model.parameters(), lr=learning_rate)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
     criterion = nn.CrossEntropyLoss(ignore_index=tokenizer.pad_token_id)
 
-    data_directory = "/content/drive/MyDrive/Xsum/article_collections/"
+    data_directory = "/home1/s5734436/thesis-graph/Xsum/article_collections/"
     train_data = open_json_file(data_directory, "train")
     valid_data = open_json_file(data_directory, "valid")
     test_data = open_json_file(data_directory, "test")
