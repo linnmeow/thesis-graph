@@ -1,0 +1,382 @@
+Starting epoch 1/8...
+Batch 1/2000, Loss: 2.6293
+Batch 101/2000, Loss: 2.6537
+Batch 201/2000, Loss: 2.5213
+Batch 301/2000, Loss: 1.7376
+Batch 401/2000, Loss: 1.7398
+Batch 501/2000, Loss: 2.5183
+Batch 601/2000, Loss: 1.7278
+Batch 701/2000, Loss: 2.3230
+Batch 801/2000, Loss: 2.0297
+Batch 901/2000, Loss: 2.3497
+Batch 1001/2000, Loss: 1.7114
+Batch 1101/2000, Loss: 2.2004
+Batch 1201/2000, Loss: 2.5282
+Batch 1301/2000, Loss: 1.9606
+Batch 1401/2000, Loss: 1.9206
+Batch 1501/2000, Loss: 1.9546
+Batch 1601/2000, Loss: 2.2983
+Batch 1701/2000, Loss: 2.3667
+Batch 1801/2000, Loss: 2.0035
+Batch 1901/2000, Loss: 1.6017
+Validation Batch 1/250, Loss: 1.9224
+Validation Batch 11/250, Loss: 1.9534
+Validation Batch 21/250, Loss: 2.2386
+Validation Batch 31/250, Loss: 2.1702
+Validation Batch 41/250, Loss: 1.9901
+Validation Batch 51/250, Loss: 1.3404
+Validation Batch 61/250, Loss: 1.7928
+Validation Batch 71/250, Loss: 1.9693
+Validation Batch 81/250, Loss: 1.7854
+Validation Batch 91/250, Loss: 2.0371
+Validation Batch 101/250, Loss: 1.5517
+Validation Batch 111/250, Loss: 2.1664
+Validation Batch 121/250, Loss: 1.8465
+Validation Batch 131/250, Loss: 1.8865
+Validation Batch 141/250, Loss: 2.4916
+Validation Batch 151/250, Loss: 1.7900
+Validation Batch 161/250, Loss: 1.9933
+Validation Batch 171/250, Loss: 1.5907
+Validation Batch 181/250, Loss: 1.7654
+Validation Batch 191/250, Loss: 2.4921
+Validation Batch 201/250, Loss: 1.4972
+Validation Batch 211/250, Loss: 1.2816
+Validation Batch 221/250, Loss: 1.7762
+Validation Batch 231/250, Loss: 2.0685
+Validation Batch 241/250, Loss: 1.5214
+Epoch 1, Train Loss: 2.0576, Validation Loss: 1.7463
+Validation loss improved, saving model to ./model_checkpoints
+Starting epoch 2/8...
+Batch 1/2000, Loss: 1.8387
+Batch 101/2000, Loss: 1.7904
+Batch 201/2000, Loss: 1.9825
+Batch 301/2000, Loss: 2.0009
+Batch 401/2000, Loss: 2.5134
+Batch 501/2000, Loss: 1.8091
+Batch 601/2000, Loss: 1.8149
+Batch 701/2000, Loss: 1.6620
+Batch 801/2000, Loss: 1.9735
+Batch 901/2000, Loss: 2.0832
+Batch 1001/2000, Loss: 2.1854
+Batch 1101/2000, Loss: 1.7445
+Batch 1201/2000, Loss: 1.7364
+Batch 1301/2000, Loss: 2.0819
+Batch 1401/2000, Loss: 2.0576
+Batch 1501/2000, Loss: 1.7534
+Batch 1601/2000, Loss: 1.4729
+Batch 1701/2000, Loss: 1.6236
+Batch 1801/2000, Loss: 1.9903
+Batch 1901/2000, Loss: 2.1503
+Validation Batch 1/250, Loss: 1.9381
+Validation Batch 11/250, Loss: 1.9156
+Validation Batch 21/250, Loss: 2.2055
+Validation Batch 31/250, Loss: 2.0847
+Validation Batch 41/250, Loss: 1.9756
+Validation Batch 51/250, Loss: 1.3513
+Validation Batch 61/250, Loss: 1.7479
+Validation Batch 71/250, Loss: 1.9350
+Validation Batch 81/250, Loss: 1.7339
+Validation Batch 91/250, Loss: 2.0221
+Validation Batch 101/250, Loss: 1.5042
+Validation Batch 111/250, Loss: 2.1448
+Validation Batch 121/250, Loss: 1.8027
+Validation Batch 131/250, Loss: 1.8550
+Validation Batch 141/250, Loss: 2.3896
+Validation Batch 151/250, Loss: 1.7686
+Validation Batch 161/250, Loss: 1.9380
+Validation Batch 171/250, Loss: 1.5496
+Validation Batch 181/250, Loss: 1.7067
+Validation Batch 191/250, Loss: 2.4562
+Validation Batch 201/250, Loss: 1.4611
+Validation Batch 211/250, Loss: 1.2847
+Validation Batch 221/250, Loss: 1.7329
+Validation Batch 231/250, Loss: 2.0673
+Validation Batch 241/250, Loss: 1.4831
+Epoch 2, Train Loss: 1.9611, Validation Loss: 1.7143
+Validation loss improved, saving model to ./model_checkpoints
+Starting epoch 3/8...
+Batch 1/2000, Loss: 2.0506
+Batch 101/2000, Loss: 1.9254
+Batch 201/2000, Loss: 2.0794
+Batch 301/2000, Loss: 2.2160
+Batch 401/2000, Loss: 2.3060
+Batch 501/2000, Loss: 2.4575
+Batch 601/2000, Loss: 1.4213
+Batch 701/2000, Loss: 1.7615
+Batch 801/2000, Loss: 2.0832
+Batch 901/2000, Loss: 2.8722
+Batch 1001/2000, Loss: 2.5236
+Batch 1101/2000, Loss: 1.8917
+Batch 1201/2000, Loss: 1.4423
+Batch 1301/2000, Loss: 2.1291
+Batch 1401/2000, Loss: 1.9343
+Batch 1501/2000, Loss: 2.3402
+Batch 1601/2000, Loss: 1.6695
+Batch 1701/2000, Loss: 2.1749
+Batch 1801/2000, Loss: 1.1760
+Batch 1901/2000, Loss: 1.7356
+Validation Batch 1/250, Loss: 1.9576
+Validation Batch 11/250, Loss: 1.9297
+Validation Batch 21/250, Loss: 2.2391
+Validation Batch 31/250, Loss: 2.1258
+Validation Batch 41/250, Loss: 1.9818
+Validation Batch 51/250, Loss: 1.3742
+Validation Batch 61/250, Loss: 1.7358
+Validation Batch 71/250, Loss: 1.9670
+Validation Batch 81/250, Loss: 1.7569
+Validation Batch 91/250, Loss: 2.0317
+Validation Batch 101/250, Loss: 1.5302
+Validation Batch 111/250, Loss: 2.1112
+Validation Batch 121/250, Loss: 1.8067
+Validation Batch 131/250, Loss: 1.8802
+Validation Batch 141/250, Loss: 2.4264
+Validation Batch 151/250, Loss: 1.7849
+Validation Batch 161/250, Loss: 1.9598
+Validation Batch 171/250, Loss: 1.5523
+Validation Batch 181/250, Loss: 1.7093
+Validation Batch 191/250, Loss: 2.4655
+Validation Batch 201/250, Loss: 1.4347
+Validation Batch 211/250, Loss: 1.2885
+Validation Batch 221/250, Loss: 1.7399
+Validation Batch 231/250, Loss: 2.0978
+Validation Batch 241/250, Loss: 1.4886
+Epoch 3, Train Loss: 1.9031, Validation Loss: 1.7169
+No improvement in validation loss for 1 epoch(s)
+Starting epoch 4/8...
+Batch 1/2000, Loss: 2.2164
+Batch 101/2000, Loss: 1.6365
+Batch 201/2000, Loss: 2.9179
+Batch 301/2000, Loss: 1.8669
+Batch 401/2000, Loss: 1.1871
+Batch 501/2000, Loss: 1.3392
+Batch 601/2000, Loss: 1.5902
+Batch 701/2000, Loss: 1.8635
+Batch 801/2000, Loss: 1.9367
+Batch 901/2000, Loss: 1.8590
+Batch 1001/2000, Loss: 2.1930
+Batch 1101/2000, Loss: 2.0881
+Batch 1201/2000, Loss: 2.0733
+Batch 1301/2000, Loss: 1.7138
+Batch 1401/2000, Loss: 1.3419
+Batch 1501/2000, Loss: 1.9931
+Batch 1601/2000, Loss: 1.5116
+Batch 1701/2000, Loss: 1.8294
+Batch 1801/2000, Loss: 1.7866
+Batch 1901/2000, Loss: 1.7090
+Validation Batch 1/250, Loss: 1.9328
+Validation Batch 11/250, Loss: 1.9350
+Validation Batch 21/250, Loss: 2.1827
+Validation Batch 31/250, Loss: 2.0968
+Validation Batch 41/250, Loss: 1.9782
+Validation Batch 51/250, Loss: 1.3482
+Validation Batch 61/250, Loss: 1.6889
+Validation Batch 71/250, Loss: 2.0003
+Validation Batch 81/250, Loss: 1.7493
+Validation Batch 91/250, Loss: 2.0439
+Validation Batch 101/250, Loss: 1.5155
+Validation Batch 111/250, Loss: 2.1009
+Validation Batch 121/250, Loss: 1.8214
+Validation Batch 131/250, Loss: 1.8099
+Validation Batch 141/250, Loss: 2.4210
+Validation Batch 151/250, Loss: 1.7375
+Validation Batch 161/250, Loss: 1.9287
+Validation Batch 171/250, Loss: 1.5231
+Validation Batch 181/250, Loss: 1.7603
+Validation Batch 191/250, Loss: 2.4623
+Validation Batch 201/250, Loss: 1.4370
+Validation Batch 211/250, Loss: 1.2756
+Validation Batch 221/250, Loss: 1.7348
+Validation Batch 231/250, Loss: 2.0900
+Validation Batch 241/250, Loss: 1.4498
+Epoch 4, Train Loss: 1.8862, Validation Loss: 1.7062
+Validation loss improved, saving model to ./model_checkpoints
+Starting epoch 5/8...
+Batch 1/2000, Loss: 1.7215
+Batch 101/2000, Loss: 1.5531
+Batch 201/2000, Loss: 1.5652
+Batch 301/2000, Loss: 1.7400
+Batch 401/2000, Loss: 1.7870
+Batch 501/2000, Loss: 2.3390
+Batch 601/2000, Loss: 1.8415
+Batch 701/2000, Loss: 1.4128
+Batch 801/2000, Loss: 2.0676
+Batch 901/2000, Loss: 1.7347
+Batch 1001/2000, Loss: 2.6332
+Batch 1101/2000, Loss: 1.3179
+Batch 1201/2000, Loss: 1.8686
+Batch 1301/2000, Loss: 2.1869
+Batch 1401/2000, Loss: 1.7569
+Batch 1501/2000, Loss: 1.6911
+Batch 1601/2000, Loss: 1.6743
+Batch 1701/2000, Loss: 1.3264
+Batch 1801/2000, Loss: 2.4728
+Batch 1901/2000, Loss: 1.2923
+Validation Batch 1/250, Loss: 1.9644
+Validation Batch 11/250, Loss: 1.9014
+Validation Batch 21/250, Loss: 2.1566
+Validation Batch 31/250, Loss: 2.0680
+Validation Batch 41/250, Loss: 1.9494
+Validation Batch 51/250, Loss: 1.3580
+Validation Batch 61/250, Loss: 1.6670
+Validation Batch 71/250, Loss: 1.9814
+Validation Batch 81/250, Loss: 1.7500
+Validation Batch 91/250, Loss: 2.0268
+Validation Batch 101/250, Loss: 1.5023
+Validation Batch 111/250, Loss: 2.0376
+Validation Batch 121/250, Loss: 1.7894
+Validation Batch 131/250, Loss: 1.7975
+Validation Batch 141/250, Loss: 2.4342
+Validation Batch 151/250, Loss: 1.7686
+Validation Batch 161/250, Loss: 1.9117
+Validation Batch 171/250, Loss: 1.5393
+Validation Batch 181/250, Loss: 1.7329
+Validation Batch 191/250, Loss: 2.4477
+Validation Batch 201/250, Loss: 1.4115
+Validation Batch 211/250, Loss: 1.2563
+Validation Batch 221/250, Loss: 1.7151
+Validation Batch 231/250, Loss: 2.0979
+Validation Batch 241/250, Loss: 1.4354
+Epoch 5, Train Loss: 1.8654, Validation Loss: 1.6923
+Validation loss improved, saving model to ./model_checkpoints
+Starting epoch 6/8...
+Batch 1/2000, Loss: 1.8347
+Batch 101/2000, Loss: 1.7973
+Batch 201/2000, Loss: 1.9741
+Batch 301/2000, Loss: 2.1505
+Batch 401/2000, Loss: 1.9893
+Batch 501/2000, Loss: 1.7033
+Batch 601/2000, Loss: 2.9973
+Batch 701/2000, Loss: 1.8045
+Batch 801/2000, Loss: 1.9476
+Batch 901/2000, Loss: 1.7183
+Batch 1001/2000, Loss: 1.6090
+Batch 1101/2000, Loss: 1.5680
+Batch 1201/2000, Loss: 1.9583
+Batch 1301/2000, Loss: 1.9405
+Batch 1401/2000, Loss: 1.9071
+Batch 1501/2000, Loss: 1.8613
+Batch 1601/2000, Loss: 2.1788
+Batch 1701/2000, Loss: 1.0621
+Batch 1801/2000, Loss: 1.4065
+Batch 1901/2000, Loss: 1.4936
+Validation Batch 1/250, Loss: 1.9556
+Validation Batch 11/250, Loss: 1.9079
+Validation Batch 21/250, Loss: 2.1573
+Validation Batch 31/250, Loss: 2.0487
+Validation Batch 41/250, Loss: 1.9898
+Validation Batch 51/250, Loss: 1.3156
+Validation Batch 61/250, Loss: 1.6726
+Validation Batch 71/250, Loss: 1.9610
+Validation Batch 81/250, Loss: 1.7307
+Validation Batch 91/250, Loss: 2.0557
+Validation Batch 101/250, Loss: 1.4910
+Validation Batch 111/250, Loss: 2.0493
+Validation Batch 121/250, Loss: 1.7720
+Validation Batch 131/250, Loss: 1.7900
+Validation Batch 141/250, Loss: 2.3781
+Validation Batch 151/250, Loss: 1.7499
+Validation Batch 161/250, Loss: 1.9035
+Validation Batch 171/250, Loss: 1.5753
+Validation Batch 181/250, Loss: 1.7279
+Validation Batch 191/250, Loss: 2.4651
+Validation Batch 201/250, Loss: 1.4136
+Validation Batch 211/250, Loss: 1.2479
+Validation Batch 221/250, Loss: 1.7387
+Validation Batch 231/250, Loss: 2.1059
+Validation Batch 241/250, Loss: 1.4390
+Epoch 6, Train Loss: 1.8469, Validation Loss: 1.6925
+No improvement in validation loss for 1 epoch(s)
+Starting epoch 7/8...
+Batch 1/2000, Loss: 1.8617
+Batch 101/2000, Loss: 1.8042
+Batch 201/2000, Loss: 1.7819
+Batch 301/2000, Loss: 1.7855
+Batch 401/2000, Loss: 1.3313
+Batch 501/2000, Loss: 1.5549
+Batch 601/2000, Loss: 1.8071
+Batch 701/2000, Loss: 2.0960
+Batch 801/2000, Loss: 1.4484
+Batch 901/2000, Loss: 1.8435
+Batch 1001/2000, Loss: 1.7488
+Batch 1101/2000, Loss: 1.9311
+Batch 1201/2000, Loss: 1.6492
+Batch 1301/2000, Loss: 1.5224
+Batch 1401/2000, Loss: 1.6644
+Batch 1501/2000, Loss: 1.5292
+Batch 1601/2000, Loss: 2.2732
+Batch 1701/2000, Loss: 2.0054
+Batch 1801/2000, Loss: 1.9045
+Batch 1901/2000, Loss: 2.2783
+Validation Batch 1/250, Loss: 1.9553
+Validation Batch 11/250, Loss: 1.9188
+Validation Batch 21/250, Loss: 2.1601
+Validation Batch 31/250, Loss: 2.0662
+Validation Batch 41/250, Loss: 1.9806
+Validation Batch 51/250, Loss: 1.3512
+Validation Batch 61/250, Loss: 1.6867
+Validation Batch 71/250, Loss: 1.9895
+Validation Batch 81/250, Loss: 1.6976
+Validation Batch 91/250, Loss: 2.0593
+Validation Batch 101/250, Loss: 1.5211
+Validation Batch 111/250, Loss: 2.0365
+Validation Batch 121/250, Loss: 1.7742
+Validation Batch 131/250, Loss: 1.8178
+Validation Batch 141/250, Loss: 2.4260
+Validation Batch 151/250, Loss: 1.7792
+Validation Batch 161/250, Loss: 1.9256
+Validation Batch 171/250, Loss: 1.5554
+Validation Batch 181/250, Loss: 1.7551
+Validation Batch 191/250, Loss: 2.4732
+Validation Batch 201/250, Loss: 1.4302
+Validation Batch 211/250, Loss: 1.2732
+Validation Batch 221/250, Loss: 1.7335
+Validation Batch 231/250, Loss: 2.1138
+Validation Batch 241/250, Loss: 1.4323
+Epoch 7, Train Loss: 1.8356, Validation Loss: 1.6963
+No improvement in validation loss for 2 epoch(s)
+Early stopping triggered. Stopping training.
+Batch 1/250 processed.
+Batch 101/250 processed.
+Batch 201/250 processed.
+Generated Summary 1: Former Tory MP Zac Goldsmith has won a by-election in London's Richmond Park.
+Reference Summary 1: Zac Goldsmith has retaken Richmond Park for the Conservative party in one of the most dramatic results of the election.
+Generated Summary 2: Labour says it is concerned about the potential for rip-off charges for pensioners who use so-called income drawdown schemes to access their cash.
+Reference Summary 2: Labour is urging the government to ensure people taking advantage of new pension freedoms next April are not ripped off by financial firms.
+Generated Summary 3: A replica of the world's first computer has been unveiled in the UK.
+Reference Summary 3: A project to recreate one of Britain's pioneering computers has reached a key milestone.
+Generated Summary 4: "It's a sad day for life, man. I loved Muhammad Ali, he was my friend. He was just so amazing in every way.
+Reference Summary 4: Figures from the world of boxing and beyond have paid tribute to Muhammad Ali, the former world heavyweight boxing champion, who has died aged 74.
+Generated Summary 5: Rangers have signed Leeds United defender Kostas Zaliukas on a two-year deal until the end of the season.
+Reference Summary 5: Lithuanian defender Marius Zaliukas has signed a two-year contract with Rangers, after impressing during a trial with the Ibrox club.
+
+###############################################################################
+Hábrók Cluster
+Job 12605400 for user s5734436
+Finished at: Fri Aug 30 01:48:10 CEST 2024
+
+Job details:
+============
+
+Job ID                         : 12605400
+Name                           : baseline
+User                           : s5734436
+Partition                      : gpumedium
+Nodes                          : a100gpu2
+Number of Nodes                : 1
+Cores                          : 8
+Number of Tasks                : 1
+State                          : COMPLETED  
+Submit                         : 2024-08-29T17:07:09
+Start                          : 2024-08-29T23:54:27
+End                            : 2024-08-30T01:48:07
+Reserved walltime              : 1-00:00:00
+Used walltime                  :   01:53:40
+Used CPU time                  :   03:07:24 (Efficiency: 20.61%)
+% User (Computation)           : 89.33%
+% System (I/O)                 : 10.67%
+Total memory reserved          : 12G
+Maximum memory used            : 2.46G
+Requested GPUs                 : a100=4
+Allocated GPUs                 : a100=4
+Max GPU utilization            : 89%
+Max GPU memory used            : 4.89G
