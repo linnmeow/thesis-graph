@@ -25,7 +25,7 @@ def token_count_range(directory, model_name):
                 document = item.get("article", "") 
                 summary = item.get("highlights", "") 
 
-                # xsum
+                # # xsum
                 # document = item.get("document", "") 
                 # summary = item.get("summary", "") 
                 # index = item.get("id", "")
