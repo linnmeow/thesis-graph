@@ -57,6 +57,30 @@ class XSum(Dataset):
             'document': document,
             'summary': summary
         }
+    
+class Fiction(Dataset):
+    def __init__(self, data, tokenizer, max_length=1024):
+        self.data = data
+        self.tokenizer = tokenizer
+        self.max_length = max_length
+
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, idx):
+        document = self.data[idx]['document']
+        summary = self.data[idx]['summary']
+
+        inputs = self.tokenizer(document, return_tensors='pt', max_length=self.max_length, padding='max_length', truncation=True)
+        outputs = self.tokenizer(summary, return_tensors='pt', max_length=self.max_length, padding='max_length', truncation=True)
+
+        return {
+            'input_ids': inputs['input_ids'].squeeze(),
+            'attention_mask': inputs['attention_mask'].squeeze(),
+            'labels': outputs['input_ids'].squeeze(),
+            'document': document,
+            'summary': summary
+        }
 
 def data_collator(features):
     batch = {}
@@ -198,11 +222,11 @@ def test_model(model, dataloader, tokenizer, device, output_file, num_beams, min
             for i in range(input_ids.size(0)):
                 generated_summary = tokenizer.decode(summary_tokens[i], skip_special_tokens=True)
                 
-                # get reference summary and source text for CNN/DM dataset
+                # # get reference summary and source text for CNN/DM dataset
                 # reference_summary = batch['highlights'][i]
                 # source_text = batch['article'][i]
 
-                # get reference summary and source text for XSum dataset
+                # get reference summary and source text for XSum dataset or Fiction
                 reference_summary = batch['summary'][i]
                 source_text = batch['document'][i]
 
@@ -242,12 +266,12 @@ if __name__ == "__main__":
     log_dir = './logs'
 
     # hyperparameters for decoding
-    # summary range cnn_dm: 9-751, xsum: 1-90
+    # summary range cnn_dm: 9-751, xsum: 1-90, fiction: 5-321
     # num_beams = 4 (cnn_dm), 6 (xsum)
     
-    num_beams = 6
-    min_length = 1
-    max_length = 90
+    num_beams = 4
+    min_length = 5
+    max_length = 321
     no_repeat_ngram_size = 3
 
     if not os.path.exists(model_save_path):
@@ -262,7 +286,7 @@ if __name__ == "__main__":
     optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
     criterion = nn.CrossEntropyLoss(ignore_index=tokenizer.pad_token_id)
 
-    data_directory = "/home1/s5734436/thesis-graph/Xsum/article_collections/"
+    data_directory = "/local/linye/thesis-graph/fiction/article_collections/"
     train_data = open_json_file(data_directory, "train")
     valid_data = open_json_file(data_directory, "valid")
     test_data = open_json_file(data_directory, "test")
@@ -271,9 +295,13 @@ if __name__ == "__main__":
     # valid_dataset = CNN_DM(valid_data, tokenizer)
     # test_dataset = CNN_DM(test_data, tokenizer)
 
-    train_dataset = XSum(train_data, tokenizer)
-    valid_dataset = XSum(valid_data, tokenizer)
-    test_dataset = XSum(test_data, tokenizer)
+    # train_dataset = XSum(train_data, tokenizer)
+    # valid_dataset = XSum(valid_data, tokenizer)
+    # test_dataset = XSum(test_data, tokenizer)
+
+    train_dataset = Fiction(train_data, tokenizer)
+    valid_dataset = Fiction(valid_data, tokenizer)
+    test_dataset = Fiction(test_data, tokenizer)
 
     train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, collate_fn=data_collator)
     valid_dataloader = DataLoader(valid_dataset, batch_size=batch_size, shuffle=False, collate_fn=data_collator)
