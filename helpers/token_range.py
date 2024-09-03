@@ -25,10 +25,10 @@ def token_count_range(directory, model_name):
                 document = item.get("article", "") 
                 summary = item.get("highlights", "") 
 
-                # # xsum
+                # # xsum/ fiction
                 # document = item.get("document", "") 
                 # summary = item.get("summary", "") 
-                # index = item.get("id", "")
+                # # index = item.get("id", "")
 
                 # check if the document or summary is empty and print the filename and index
                 if not document or not summary:
@@ -36,8 +36,8 @@ def token_count_range(directory, model_name):
                     continue
                 
                 # tokenize the document and summary
-                document_encoding = tokenizer(document, return_tensors=None, truncation=True, padding=False)
-                summary_encoding = tokenizer(summary, return_tensors=None, truncation=True, padding=False)
+                document_encoding = tokenizer(document, return_tensors=None, truncation=False, padding=False)
+                summary_encoding = tokenizer(summary, return_tensors=None, truncation=False, padding=False)
                 
                 # access the 'input_ids' from the tokenization output
                 document_tokens = document_encoding['input_ids']
