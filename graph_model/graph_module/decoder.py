@@ -53,18 +53,23 @@ class DecoderLayerWithDualCrossAttention(BartDecoderLayer):
         self.activation_fn = nn.ReLU()
         self.activation_dropout = config.activation_dropout
 
-    def prepare_attention_mask(self, attention_mask, num_heads):
+    def prepare_attention_mask(self, attention_mask, num_heads, is_testing=False):
         # convert to boolean if not already
         if attention_mask.dtype != torch.bool:
             attention_mask = attention_mask.bool()
         
         # expand mask for each attention head
         batch_size, seq_len = attention_mask.shape
-        # expand to [batch_size, 1, seq_len, seq_len] and then repeat for num_heads
-        attention_mask = attention_mask.unsqueeze(1).expand(batch_size, num_heads, seq_len, seq_len)
-        # reshape to [batch_size * num_heads, seq_len, seq_len]
-        attention_mask = attention_mask.reshape(batch_size * num_heads, seq_len, seq_len)
-        
+        if is_testing:
+            # during testing, prepare attention mask with shape [batch_size * num_heads, 1, seq_len]
+            attention_mask = attention_mask.unsqueeze(1)  # [batch_size, 1, seq_len]
+            attention_mask = attention_mask.expand(batch_size * num_heads, 1, seq_len)  # [batch_size * num_heads, 1, seq_len]
+        else:
+            # expand to [batch_size, 1, seq_len, seq_len] and then repeat for num_heads
+            attention_mask = attention_mask.unsqueeze(1).expand(batch_size, num_heads, seq_len, seq_len)
+            # reshape to [batch_size * num_heads, seq_len, seq_len]
+            attention_mask = attention_mask.reshape(batch_size * num_heads, seq_len, seq_len)
+            
         return attention_mask
     
     def add_batch_dimension(self, graph_embeddings, batch_size):
@@ -86,6 +91,7 @@ class DecoderLayerWithDualCrossAttention(BartDecoderLayer):
         labels=None,
         output_attentions=False,
         use_cache=False,
+        is_testing=False
     ):
         # ensure graph_embeddings has batch dimension
         batch_size = hidden_states.size(0)
@@ -99,13 +105,13 @@ class DecoderLayerWithDualCrossAttention(BartDecoderLayer):
         # prepare the attention masks
         num_heads = self.self_attn.num_heads  # number of attention heads
         if attention_mask is not None:
-            attention_mask = self.prepare_attention_mask(attention_mask, num_heads)
+            attention_mask = self.prepare_attention_mask(attention_mask, num_heads,is_testing=is_testing)
 
         if encoder_attention_mask is not None:
-            encoder_attention_mask = self.prepare_attention_mask(encoder_attention_mask, num_heads)
+            encoder_attention_mask = self.prepare_attention_mask(encoder_attention_mask, num_heads, is_testing=is_testing)
 
         if graph_attention_mask is not None:
-            graph_attention_mask = self.prepare_attention_mask(graph_attention_mask, num_heads)
+            graph_attention_mask = self.prepare_attention_mask(graph_attention_mask, num_heads, is_testing=is_testing)
         
         # standard self-attention
         residual = hidden_states
@@ -185,7 +191,7 @@ class Seq2SeqModel(nn.Module):
         ])
         self.output_proj = nn.Linear(self.bart.config.d_model, self.bart.config.vocab_size)
 
-    def forward(self, input_ids, attention_mask, decoder_input_ids, decoder_attention_mask, graph_node_features, edge_index, labels=None):
+    def forward(self, input_ids, attention_mask, decoder_input_ids, decoder_attention_mask, graph_node_features, edge_index, is_testing=False):
         # get encoder outputs
         encoder_hidden_states = self.encoder_document(input_ids, attention_mask)
         # get graph embeddings
@@ -202,95 +208,44 @@ class Seq2SeqModel(nn.Module):
                 attention_mask=decoder_attention_mask,
                 encoder_hidden_states=encoder_hidden_states,
                 encoder_attention_mask=attention_mask,
-                graph_embeddings=graph_embeddings
+                graph_embeddings=graph_embeddings,
+                is_testing=is_testing
             )[0]
 
         # project to vocabulary size
         logits = self.output_proj(hidden_states)
 
-        # calculate loss if labels are provided
-        loss = None
-        if labels is not None:
-            criterion = nn.CrossEntropyLoss()
-            loss = criterion(logits.view(-1, logits.size(-1)), labels.view(-1))
+        return logits
+   
+    def generate_summary(self, input_ids, attention_mask, graph_node_features, edge_index, max_length, min_length):
+        self.eval()
+        batch_size = input_ids.size(0)
+        device = input_ids.device
 
-        return logits, loss
+        # initialize decoder input with BOS token
+        generated_ids = torch.full((batch_size, 1), self.bart.config.bos_token_id, dtype=torch.long, device=device)
 
-    
-# def train_model(train_loader, model, tokenizer, optimizer, device):
-#     model.train()
-#     total_loss = 0
-#     for batch in train_loader:
-#         optimizer.zero_grad()
+        for step in range(max_length):
+            # forward pass
+            outputs = self.forward(
+                input_ids=input_ids,
+                attention_mask=attention_mask,
+                decoder_input_ids=generated_ids,
+                decoder_attention_mask=None,  # no mask needed during inference
+                graph_node_features=graph_node_features,
+                edge_index=edge_index,
+                is_testing=True
+            )
 
-#         # move text data to device
-#         encoder_input_ids = batch['encoder_input_ids'].to(device)
-#         encoder_attention_mask = batch['encoder_attention_mask'].to(device)
-#         decoder_input_ids = batch['decoder_input_ids'].to(device)  
-#         decoder_attention_mask = batch['decoder_attention_mask'].to(device)
+            # get the logits of the last generated token
+            logits = outputs[:, -1, :]
+            next_token_id = torch.argmax(logits, dim=-1, keepdim=True)
 
-#         # shift decoder_input_ids to create labels
-#         labels = decoder_input_ids[:, 1:]
-#         # add padding token at the end of the sequence to ensure seq length consistency
-#         pad_token_id = tokenizer.pad_token_id
-#         pad_tensor = decoder_input_ids.new_full((decoder_input_ids.size(0), 1), pad_token_id)
+            # ensure min_length constraint is met before allowing <eos> token to break the loop
+            if step >= min_length and next_token_id.item() == self.bart.config.eos_token_id:
+                break
 
-#         # append the padding token to the end of the labels
-#         labels = torch.cat([labels, pad_tensor], dim=1).to(device)
+            # append the predicted token to the generated sequence
+            generated_ids = torch.cat([generated_ids, next_token_id], dim=1)
 
-#         # move graph data to device
-#         graph_data = batch['graph_batch']
-        
-#         graph_node_features = graph_data.x.to(device) if graph_data is not None else None
-#         edge_index = graph_data.edge_index.to(device) if graph_data is not None else None
-    
-#         # forward pass
-#         outputs = model(
-#             input_ids=encoder_input_ids,
-#             attention_mask=encoder_attention_mask,
-#             decoder_input_ids=decoder_input_ids,
-#             decoder_attention_mask=decoder_attention_mask,
-#             graph_node_features=graph_node_features,
-#             edge_index=edge_index,
-#             labels=labels
-#         )
-#         logits, loss = outputs
-        
-#         # calculate loss (use the combined outputs for the loss)
-#         logits, loss = outputs
-#         loss.backward()
-#         optimizer.step()
-#         total_loss += loss.item()
-
-#     print(f"Training Loss: {total_loss/len(train_loader)}")
-
-
-# if __name__ == "__main__":
-
-#     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-#     print(f"Using device: {device}")
-
-#     data = load_data("./examples.json")
-
-#     tokenizer = BartTokenizer.from_pretrained('facebook/bart-large')
-#     vocab_size = len(tokenizer.get_vocab())
-#     embedding_dim = 256
-#     hidden_dim = 512  
-#     bilstm_model = BiLSTM(vocab_size, embedding_dim, hidden_dim)
-#     bilstm_model.eval()
-
-#     dataset = CNN_DM_Graph(data, tokenizer, max_length=1024, model=bilstm_model)
-#     dataloader = DataLoader(dataset, batch_size=1, shuffle=True, collate_fn=custom_collate_fn)
-
-#     model = Seq2SeqModel(
-#         bart_model_name='facebook/bart-large',
-#         gat_in_channels=512,
-#         gat_out_channels=256,
-#         gat_heads=4,
-#         dropout=0.2
-#     ).to(device)
-    
-#     optimizer = torch.optim.AdamW(model.parameters(), lr=5e-5)
-#     for epoch in range(3):  
-#         print(f"Epoch {epoch + 1}")
-#         train_model(dataloader, model, tokenizer, optimizer, device)
+        return generated_ids

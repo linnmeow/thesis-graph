@@ -67,7 +67,7 @@ def custom_collate_fn(batch):
         'decoder_input_ids': torch.stack([item['decoder_input_ids'] for item in batch]),
         'decoder_attention_mask': torch.stack([item['decoder_attention_mask'] for item in batch]),
         'doc_ids': [item['doc_id'] for item in batch],  # keep track of document IDs
-        'articles': [item['article'] for item in batch],
+        'article': [item['article'] for item in batch],
         'highlights': [item['highlights'] for item in batch]
     }
     # print the type and dtype of the attention mask
