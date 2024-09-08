@@ -7,6 +7,7 @@ from torch.utils.data import DataLoader, Dataset
 from torch_geometric.data import Data, Batch
 from torch_geometric.utils import from_networkx
 from transformers import BartTokenizer, BartModel
+import os
 
 from graph_module.levi_transformation import perform_levi_transformation, prune_small_subgraphs
 from graph_module.get_graph_embeddings import get_embeddings, embed_graph, BiLSTM

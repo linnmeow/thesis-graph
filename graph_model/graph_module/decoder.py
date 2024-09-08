@@ -53,24 +53,23 @@ class DecoderLayerWithDualCrossAttention(BartDecoderLayer):
         self.activation_fn = nn.ReLU()
         self.activation_dropout = config.activation_dropout
 
-    def prepare_attention_mask(self, attention_mask, num_heads, is_testing=False):
-        # convert to boolean if not already
+    def prepare_attention_mask(self, attention_mask, num_heads):
+        # Cconvert to boolean mask if not already
         if attention_mask.dtype != torch.bool:
             attention_mask = attention_mask.bool()
         
-        # expand mask for each attention head
+        # get batch size and sequence length
         batch_size, seq_len = attention_mask.shape
-        if is_testing:
-            # during testing, prepare attention mask with shape [batch_size * num_heads, 1, seq_len]
-            attention_mask = attention_mask.unsqueeze(1)  # [batch_size, 1, seq_len]
-            attention_mask = attention_mask.expand(batch_size * num_heads, 1, seq_len)  # [batch_size * num_heads, 1, seq_len]
-        else:
-            # expand to [batch_size, 1, seq_len, seq_len] and then repeat for num_heads
-            attention_mask = attention_mask.unsqueeze(1).expand(batch_size, num_heads, seq_len, seq_len)
-            # reshape to [batch_size * num_heads, seq_len, seq_len]
-            attention_mask = attention_mask.reshape(batch_size * num_heads, seq_len, seq_len)
-            
+
+        # during training, expand to [batch_size, 1, 1, seq_len] for broadcasting across heads
+        attention_mask = attention_mask.unsqueeze(1).unsqueeze(2)  # [batch_size, 1, 1, seq_len]
+        attention_mask = attention_mask.expand(batch_size, num_heads, seq_len, seq_len)  # [batch_size, num_heads, seq_len, seq_len]
+        
+        # reshape to [batch_size * num_heads, seq_len, seq_len] for multi-head attention
+        attention_mask = attention_mask.reshape(batch_size * num_heads, seq_len, seq_len)
+
         return attention_mask
+
     
     def add_batch_dimension(self, graph_embeddings, batch_size):
         # graph_embeddings is of shape [num_nodes, embedding_dim]
@@ -90,8 +89,7 @@ class DecoderLayerWithDualCrossAttention(BartDecoderLayer):
         graph_attention_mask=None,
         labels=None,
         output_attentions=False,
-        use_cache=False,
-        is_testing=False
+        use_cache=False
     ):
         # ensure graph_embeddings has batch dimension
         batch_size = hidden_states.size(0)
@@ -105,13 +103,13 @@ class DecoderLayerWithDualCrossAttention(BartDecoderLayer):
         # prepare the attention masks
         num_heads = self.self_attn.num_heads  # number of attention heads
         if attention_mask is not None:
-            attention_mask = self.prepare_attention_mask(attention_mask, num_heads,is_testing=is_testing)
+            attention_mask = self.prepare_attention_mask(attention_mask, num_heads)
 
         if encoder_attention_mask is not None:
-            encoder_attention_mask = self.prepare_attention_mask(encoder_attention_mask, num_heads, is_testing=is_testing)
+            encoder_attention_mask = self.prepare_attention_mask(encoder_attention_mask, num_heads)
 
         if graph_attention_mask is not None:
-            graph_attention_mask = self.prepare_attention_mask(graph_attention_mask, num_heads, is_testing=is_testing)
+            graph_attention_mask = self.prepare_attention_mask(graph_attention_mask, num_heads)
         
         # standard self-attention
         residual = hidden_states
@@ -191,7 +189,7 @@ class Seq2SeqModel(nn.Module):
         ])
         self.output_proj = nn.Linear(self.bart.config.d_model, self.bart.config.vocab_size)
 
-    def forward(self, input_ids, attention_mask, decoder_input_ids, decoder_attention_mask, graph_node_features, edge_index, is_testing=False):
+    def forward(self, input_ids, attention_mask, decoder_input_ids, decoder_attention_mask, graph_node_features, edge_index):
         # get encoder outputs
         encoder_hidden_states = self.encoder_document(input_ids, attention_mask)
         # get graph embeddings
@@ -208,8 +206,7 @@ class Seq2SeqModel(nn.Module):
                 attention_mask=decoder_attention_mask,
                 encoder_hidden_states=encoder_hidden_states,
                 encoder_attention_mask=attention_mask,
-                graph_embeddings=graph_embeddings,
-                is_testing=is_testing
+                graph_embeddings=graph_embeddings
             )[0]
 
         # project to vocabulary size
@@ -249,3 +246,75 @@ class Seq2SeqModel(nn.Module):
             generated_ids = torch.cat([generated_ids, next_token_id], dim=1)
 
         return generated_ids
+
+    def generate_summary_with_beam_search(
+        self,
+        input_ids,
+        attention_mask,
+        graph_node_features,
+        edge_index,
+        max_length,
+        min_length,
+        beam_size
+    ):
+        self.eval()
+        batch_size = input_ids.size(0)
+        device = input_ids.device
+
+        # Initialize the beam search
+        beams = [(torch.full((batch_size, 1), self.bart.config.bos_token_id, dtype=torch.long, device=device), 0)]  # (sequence, score)
+
+        # List to store the final hypotheses
+        final_beams = []
+
+        for step in range(max_length):
+            new_beams = []
+
+            # iterate over all beams
+            for seq, score in beams:
+                # forward pass
+                outputs = self.forward(
+                    input_ids=input_ids,
+                    attention_mask=attention_mask,
+                    decoder_input_ids=seq,
+                    decoder_attention_mask=None,  # no mask needed during inference
+                    graph_node_features=graph_node_features,
+                    edge_index=edge_index
+                )
+
+                # get logits and scores for the last token
+                logits = outputs[:, -1, :]
+                probs = F.log_softmax(logits, dim=-1)  # get log probabilities
+
+                # expand the beams
+                for token_id in range(logits.size(-1)):
+                    new_seq = torch.cat([seq, torch.full((batch_size, 1), token_id, dtype=torch.long, device=device)], dim=1)
+                    new_score = score + probs[:, token_id].item()
+
+                    # ensure that the <eos> token is not selected before reaching min_length
+                    if step + 1 < min_length and token_id == self.bart.config.eos_token_id:
+                        continue  # skip adding this sequence if it ends with <eos> before min_length
+
+                    new_beams.append((new_seq, new_score))
+
+            # prune beams
+            new_beams = sorted(new_beams, key=lambda x: x[1], reverse=True)[:beam_size]
+
+            # check if end-of-sequence token reached
+            final_beams.extend([beam for beam in new_beams if beam[0][0, -1].item() == self.bart.config.eos_token_id and step + 1 >= min_length])
+            new_beams = [beam for beam in new_beams if beam[0][0, -1].item() != self.bart.config.eos_token_id or step + 1 < min_length]
+
+            if not new_beams and final_beams:
+                # if no more beams but some final sequences, break early
+                break
+
+            beams = new_beams
+
+        # get the best sequence
+        if not final_beams:
+            final_beams = beams
+
+        best_seq = max(final_beams, key=lambda x: x[1])[0]
+
+        return best_seq
+

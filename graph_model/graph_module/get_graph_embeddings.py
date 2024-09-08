@@ -7,7 +7,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 class BiLSTM(nn.Module):
-    def __init__(self, vocab_size, embedding_dim, hidden_dim, num_layers=2, dropout=0.5):
+    def __init__(self, vocab_size, embedding_dim, hidden_dim, num_layers=2, dropout=0.1):
         super(BiLSTM, self).__init__()
         self.embedding = nn.Embedding(vocab_size, embedding_dim)
         self.lstm = nn.LSTM(embedding_dim, hidden_dim, num_layers=num_layers, 

@@ -57,6 +57,13 @@ def load_data(data_path):
     with open(data_path, "r") as f:
         return json.load(f)
 
+def open_json_file(data_dir, file_prefix):
+    input_path = os.path.join(data_dir, f"{file_prefix}_processed.json")
+    print(f"Loading data from {input_path}...")
+    with open(input_path, "r") as f:
+        data = json.load(f)
+    return data
+
 def visualize_graph(G, entry_id):
     plt.figure(figsize=(12, 8))
     pos = nx.spring_layout(G, k=0.35)  
