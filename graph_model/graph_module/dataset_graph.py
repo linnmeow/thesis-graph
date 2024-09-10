@@ -13,11 +13,12 @@ from graph_module.levi_transformation import perform_levi_transformation, prune_
 from graph_module.get_graph_embeddings import get_embeddings, embed_graph, BiLSTM
 
 class CNN_DM_Graph(Dataset):
-    def __init__(self, data, tokenizer, max_length=1024, model=None):
+    def __init__(self, data, tokenizer, max_length=1024, model=None, device=None):
         self.data = data
         self.tokenizer = tokenizer
         self.max_length = max_length
         self.model = model
+        self.device = device if device is not None else torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     def __len__(self):
         return len(self.data)
@@ -33,10 +34,10 @@ class CNN_DM_Graph(Dataset):
         decoder_inputs = self.tokenizer(highlights, return_tensors='pt', max_length=self.max_length, padding='max_length', truncation=True)
 
         item = {
-            'encoder_input_ids': encoder_inputs['input_ids'].squeeze(),   # [batch_size, seq_length]
-            'encoder_attention_mask': encoder_inputs['attention_mask'].squeeze(),   # [batch_size, seq_length]
-            'decoder_input_ids': decoder_inputs['input_ids'].squeeze(),
-            'decoder_attention_mask': decoder_inputs['attention_mask'].squeeze(),
+            'encoder_input_ids': encoder_inputs['input_ids'].squeeze().to(self.device),   # [batch_size, seq_length]
+            'encoder_attention_mask': encoder_inputs['attention_mask'].squeeze().to(self.device),   # [batch_size, seq_length]
+            'decoder_input_ids': decoder_inputs['input_ids'].squeeze().to(self.device),
+            'decoder_attention_mask': decoder_inputs['attention_mask'].squeeze().to(self.device),
             'article': article,
             'highlights': highlights,
             'doc_id': doc_id
@@ -50,9 +51,9 @@ class CNN_DM_Graph(Dataset):
             
             if len(G.nodes) > 0:
                 # embed the graph
-                graph_data = embed_graph(list(G.nodes), list(G.edges), self.tokenizer, self.model)
+                graph_data = embed_graph(list(G.nodes), list(G.edges), self.tokenizer, self.model, device=self.device)
                 
-                graph_item = Data(x=graph_data.x, edge_index=graph_data.edge_index)
+                graph_item = Data(x=graph_data.x, edge_index=graph_data.edge_index).to(self.device)
 
                 # include graph data in the item
                 item['graph_data'] = graph_item
@@ -71,9 +72,6 @@ def custom_collate_fn(batch):
         'article': [item['article'] for item in batch],
         'highlights': [item['highlights'] for item in batch]
     }
-    # print the type and dtype of the attention mask
-    # print(f"Attention Mask - Type: {type(text_data['attention_mask'])}, Dtype: {text_data['attention_mask'].dtype}")
-    # Type: <class 'torch.Tensor'>, Dtype: torch.int64
     
     graph_data = [item['graph_data'] for item in batch if 'graph_data' in item]
 
@@ -90,35 +88,31 @@ def load_data(data_path):
     
 if __name__ == "__main__":
 
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(f"Using device: {device}")
+
     data = load_data("examples.json")
 
-    tokenizer = BartTokenizer.from_pretrained('facebook/bart-large')
-    # # Retrieve special token IDs
-    # start_token_id = tokenizer.bos_token_id  # 0, <s>
-    # end_token_id = tokenizer.eos_token_id    # 2, </s>
-    # pad_token_id = tokenizer.pad_token_id    # 1, <pad>
-
-    # # Convert token IDs to token names
-    # start_token = tokenizer.convert_ids_to_tokens(start_token_id) if start_token_id is not None else None
-    # end_token = tokenizer.convert_ids_to_tokens(end_token_id) if end_token_id is not None else None
-    # pad_token = tokenizer.convert_ids_to_tokens(pad_token_id) if pad_token_id is not None else None
-
-    # print(f"Start Token ID: {start_token_id}, Token: {start_token}") 
-    # print(f"End Token ID: {end_token_id}, Token: {end_token}")       
-    # print(f"Pad Token ID: {pad_token_id}, Token: {pad_token}")   
-
-
+    tokenizer = BartTokenizer.from_pretrained('facebook/bart-base')
     vocab_size = len(tokenizer.get_vocab())
     embedding_dim = 256
     hidden_dim = 512  
-    bilstm_model = BiLSTM(vocab_size, embedding_dim, hidden_dim)
+
+    # Move BiLSTM model to the correct device
+    bilstm_model = BiLSTM(vocab_size, embedding_dim, hidden_dim).to(device)
     bilstm_model.eval()
 
-    dataset = CNN_DM_Graph(data, tokenizer, max_length=1024, model=bilstm_model)
-    dataloader = DataLoader(dataset, batch_size=2, shuffle=True, collate_fn=custom_collate_fn)
+    dataset = CNN_DM_Graph(data, tokenizer, max_length=1024, model=bilstm_model, device=device)
+    dataloader = DataLoader(dataset, batch_size=1, shuffle=True, collate_fn=custom_collate_fn)
 
-    for batch in dataloader:
-        print(batch['decoder_input_ids'])
-        print(batch['encoder_input_ids'])
-        print("Batch keys:", batch.keys())
-        break
+    # [BOS]: 0, [EOS]: 2, [PAD]: 1
+
+    # for batch in dataloader:
+    #     if 'graph_batch' in batch:
+    #         batch['graph_batch'] = batch['graph_batch']
+
+    #     # print(batch['decoder_input_ids'].size())
+    #     print(batch['encoder_attention_mask'].tolist())
+    #     print(batch['encoder_input_ids'].tolist())
+    #     # print("Batch keys:", batch.keys())
+    #     break

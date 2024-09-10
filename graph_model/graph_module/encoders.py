@@ -7,13 +7,12 @@ from transformers import BartTokenizer, BartModel
 from graph_module.get_graph_embeddings import BiLSTM
 from graph_module.dataset_graph import CNN_DM_Graph, custom_collate_fn, load_data
 
-
 class GraphAttentionNetwork(nn.Module):
-    # GAT layer
     def __init__(self, in_channels, out_channels, heads, dropout):
         super(GraphAttentionNetwork, self).__init__()
         # GATConv expects [num_nodes, num_features], not [batch_size, num_nodes, num_features] 
         self.gat = GATConv(in_channels, out_channels, heads=heads, dropout=dropout)
+
     def forward(self, x, edge_index):
         return self.gat(x, edge_index)
     
@@ -46,56 +45,57 @@ if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
 
+    # Load data and prepare tokenizer and models
     data = load_data("./examples.json")
-
-    tokenizer = BartTokenizer.from_pretrained('facebook/bart-large')
+    tokenizer = BartTokenizer.from_pretrained('facebook/bart-base')
     vocab_size = len(tokenizer.get_vocab())
-    embedding_dim = 256
-    hidden_dim = 512  
-    bilstm_model = BiLSTM(vocab_size, embedding_dim, hidden_dim)
+    embedding_dim = 64
+    hidden_dim = 128  
+    bilstm_model = BiLSTM(vocab_size, embedding_dim, hidden_dim).to(device)
     bilstm_model.eval()
 
-    dataset = CNN_DM_Graph(data, tokenizer, max_length=1024, model=bilstm_model)
+    # Load dataset and dataloader
+    dataset = CNN_DM_Graph(data, tokenizer, max_length=1024, model=bilstm_model, device=device)
     dataloader = DataLoader(dataset, batch_size=1, shuffle=True, collate_fn=custom_collate_fn)
 
-    model_name = 'facebook/bart-large'
+    # Initialize models and optimizer
+    model_name = 'facebook/bart-base'
     tokenizer = BartTokenizer.from_pretrained(model_name)
-    model = BartModel.from_pretrained(model_name)
-    optimizer = torch.optim.AdamW(model.parameters(), lr=5e-5)
+    model = BartModel.from_pretrained(model_name).to(device)
+    # optimizer = torch.optim.AdamW(model.parameters(), lr=5e-5)
 
-    # initialize the encoders
-    encoder_document = EncoderDocument(model_name)
+    # Initialize the encoders
+    encoder_document = EncoderDocument(model_name).to(device)
     encoder_graph = EncoderGraph(
-        gat_in_channels=512,
-        gat_out_channels=256,
-        gat_heads=4,
-        dropout=0.2
-    )
+        gat_in_channels=128,
+        gat_out_channels=96,
+        gat_heads=8,
+        dropout=0.6
+    ).to(device)
    
     for batch in dataloader:
         
-        encoder_input_ids = batch['encoder_input_ids'].to(device)
-        encoder_attention_mask = batch['encoder_attention_mask'].to(device)
-        graph_data = batch['graph_batch'].to(device) if 'graph_batch' in batch else None
+        encoder_input_ids = batch['encoder_input_ids']
+        encoder_attention_mask = batch['encoder_attention_mask']
+        graph_data = batch['graph_batch'] if 'graph_batch' in batch else None
         
-        graph_node_features = graph_data.x.to(device) if graph_data is not None else None
-        edge_index = graph_data.edge_index.to(device) if graph_data is not None else None
+        graph_node_features = graph_data.x if graph_data is not None else None
+        edge_index = graph_data.edge_index if graph_data is not None else None
 
-        print(f"Input IDs Shape: {encoder_input_ids.shape}") #  [1, 1024], [batch_size, sequence_length]
-        print(f"Attention Mask Shape: {encoder_attention_mask.shape}") # [1, 1024]
+        # print(f"Input IDs Shape: {encoder_input_ids.shape}") #  [1, 1024], [batch_size, sequence_length]
+        # print(f"Attention Mask Shape: {encoder_attention_mask.shape}") # [1, 1024]
+        # print(f"Graph Node Features Shape: {graph_node_features.shape}") # [17, 256 * 4], [num_nodes, out_channels * heads]
+        # print(f"Edge Index Shape: {edge_index.shape}") # [2, 14], [2, num_edges], source and target nodes (2 rows)
 
-        if graph_node_features is not None:
-            print(f"Graph Node Features Shape: {graph_node_features.shape}") # [17, 256 * 4], [num_nodes, out_channels * heads]
-        if edge_index is not None:
-            print(f"Edge Index Shape: {edge_index.shape}") # [2, 14], [2, num_edges], source and target nodes (2 rows)
-
-        # pass through the document encoder
+        # Pass through the document encoder
         with torch.no_grad():
             document_outputs = encoder_document(encoder_input_ids, encoder_attention_mask)
             print(f"Document Encoder Output Shape: {document_outputs.shape}")  # [1, 1024, 1024], [batch_size, sequence_length, hidden_size]
+            # print(document_outputs)
 
-        # pass through the graph encoder
+        # Pass through the graph encoder
         with torch.no_grad():
             if graph_node_features is not None and edge_index is not None:
                 graph_outputs = encoder_graph(graph_node_features, edge_index)
                 print(f"Graph Encoder Output Shape: {graph_outputs.shape}")  # [17, 1024], [num_nodes, out_channels]
+                # print(graph_outputs)

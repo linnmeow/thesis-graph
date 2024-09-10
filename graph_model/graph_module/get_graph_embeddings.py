@@ -2,7 +2,6 @@ import torch
 import networkx as nx
 from transformers import BartTokenizer, BartModel
 from torch_geometric.utils import from_networkx
-import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
@@ -21,7 +20,7 @@ class BiLSTM(nn.Module):
         return self.fc(lstm_out)
 
 
-def get_embeddings(text, tokenizer, model):
+def get_embeddings(text, tokenizer, model, device):
     """
     Generate embeddings for a given text using a pre-trained BiLSTM model.
     
@@ -29,20 +28,21 @@ def get_embeddings(text, tokenizer, model):
         text (str): The text to embed.
         tokenizer (Tokenizer): The tokenizer for text to token indices.
         model (BiLSTM): The pre-trained BiLSTM model.
+        device (torch.device): The device to run computations on.
 
     Returns:
         torch.Tensor: The embedding for the text.
     """
     # tokenize and convert to indices
-    tokenized = tokenizer(text, return_tensors="pt", truncation=True, padding='max_length', max_length=512)
-    input_ids = tokenized['input_ids'].squeeze(0)  # remove batch dimension
+    tokenized = tokenizer(text, return_tensors="pt", truncation=True, padding='max_length', max_length=128)
+    input_ids = tokenized['input_ids'].squeeze(0).to(device)  # move to the device
     
     with torch.no_grad():
         embedding = model(input_ids.unsqueeze(0))  # add batch dimension
     return embedding.squeeze()  # remove batch dimension
 
 
-def embed_graph(nodes, edges, tokenizer, model):
+def embed_graph(nodes, edges, tokenizer, model, device):
     """
     Create an undirected graph with nodes and edges, and embed the nodes using BART embeddings.
     
@@ -51,6 +51,7 @@ def embed_graph(nodes, edges, tokenizer, model):
         edges (list): A list of tuples representing edges between nodes.
         tokenizer (BartTokenizer): The tokenizer.
         model (BartModel): The pre-trained BART model.
+        device (torch.device): The device to run computations on.
 
     Returns:
         torch_geometric.data.Data: The graph data object with embedded node features.
@@ -59,7 +60,7 @@ def embed_graph(nodes, edges, tokenizer, model):
     G = nx.Graph()  
 
     for i, node in enumerate(nodes):
-        embedding = get_embeddings(node, tokenizer, model)
+        embedding = get_embeddings(node, tokenizer, model, device)
         G.add_node(i, text=node, embedding=embedding)
     
     for edge in edges:
@@ -71,13 +72,16 @@ def embed_graph(nodes, edges, tokenizer, model):
     data = from_networkx(G)
     
     # extract node features from the embeddings
-    node_features = torch.stack([G.nodes[n]['embedding'] for n in G.nodes])
+    node_features = torch.stack([G.nodes[n]['embedding'] for n in G.nodes]).to(device)
     data.x = node_features  # Dimension: [num_nodes, num_node_features]
 
     return data
 
 if __name__ == "__main__":
-    # Sample data
+    # determine device
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    # sample data
     nodes = ['budget prices', 'is from', 'International Airport', 'France', 'boutique airline company', 
              'same trip', 'Paris', 'is with', 'Hotel Matignon', 'Newark', 'bus', 'company in', 
              'is in', 'board luxury aircraft', 'Charles de Gaulle Airport', 'to make', 'Trying', 
@@ -98,17 +102,20 @@ if __name__ == "__main__":
              ('Yvelin', 'says'), ('offers', 'airline La Compagnie'), ('says', 'airline La Compagnie')]
 
     # load the tokenizer and model
-    tokenizer = BartTokenizer.from_pretrained('facebook/bart-large')
+    tokenizer = BartTokenizer.from_pretrained('facebook/bart-base')
     vocab_size = len(tokenizer.get_vocab())
-    embedding_dim = 256
-    hidden_dim = 512  
+    embedding_dim = 64
+    hidden_dim = 128
+
+    # initialize and move the model to the appropriate device
     bilstm_model = BiLSTM(vocab_size, embedding_dim, hidden_dim)
+    bilstm_model.to(device)
     bilstm_model.eval()
 
-    # Embed the graph
-    graph_data = embed_graph(nodes, edges, tokenizer, bilstm_model)
+    # embed the graph
+    graph_data = embed_graph(nodes, edges, tokenizer, bilstm_model, device)
 
-    # Print the dimensions of the node features
+    # print the dimensions of the node features
     print(f"Node Features (x) dimensions: {graph_data.x.size()}")  # [num_nodes, num_node_features]
     print(f"Edge Index (edge_index) dimensions: {graph_data.edge_index.size()}")  # [2, num_edges]
 

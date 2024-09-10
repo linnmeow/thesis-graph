@@ -4,7 +4,6 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, Dataset
 from transformers import BartTokenizer, BartModel, BartForConditionalGeneration, AdamW, BartConfig
-import sentencepiece as spm
 import torch.nn.functional as F
 from transformers.models.bart.modeling_bart import BartDecoderLayer
 
@@ -50,11 +49,11 @@ class DecoderLayerWithDualCrossAttention(BartDecoderLayer):
 
         # dropout and activation
         self.dropout = config.dropout
-        self.activation_fn = nn.ReLU()
+        self.activation_fn = nn.LeakyReLU()
         self.activation_dropout = config.activation_dropout
 
     def prepare_attention_mask(self, attention_mask, num_heads):
-        # Cconvert to boolean mask if not already
+        # convert to boolean mask if not already
         if attention_mask.dtype != torch.bool:
             attention_mask = attention_mask.bool()
         
@@ -113,8 +112,6 @@ class DecoderLayerWithDualCrossAttention(BartDecoderLayer):
         
         # standard self-attention
         residual = hidden_states
-        # batch_size = hidden_states.shape[0]
-        # attention_mask = attention_mask.expand(batch_size, -1, -1)  # Dynamically handle batch size
         hidden_states, self_attn_weights = self.self_attn(
             hidden_states,  
             hidden_states,  
@@ -125,6 +122,10 @@ class DecoderLayerWithDualCrossAttention(BartDecoderLayer):
         hidden_states = F.dropout(hidden_states, p=self.dropout, training=self.training)
         hidden_states = residual + hidden_states
         hidden_states = self.self_attn_layer_norm(hidden_states)
+
+        # Debugging output after self-attention normalization
+        print("Post self-attention LayerNorm:", hidden_states.mean().item(), hidden_states.std().item())
+    
 
         # cross-attention over encoder outputs
         if encoder_hidden_states is not None:
@@ -140,6 +141,9 @@ class DecoderLayerWithDualCrossAttention(BartDecoderLayer):
             hidden_states = residual + hidden_states
             hidden_states = self.encoder_attn_layer_norm(hidden_states)
 
+            # Debugging output after encoder attention normalization
+            print("Post encoder attention LayerNorm:", hidden_states.mean().item(), hidden_states.std().item())
+
         # cross-attention over graph embeddings
         if graph_embeddings is not None:
             residual = hidden_states
@@ -154,6 +158,9 @@ class DecoderLayerWithDualCrossAttention(BartDecoderLayer):
             hidden_states = residual + hidden_states
             hidden_states = self.graph_attn_layer_norm(hidden_states)
 
+            # Debugging output after graph attention normalization
+            print("Post graph attention LayerNorm:", hidden_states.mean().item(), hidden_states.std().item())
+    
         # feed-forward network
         residual = hidden_states
         hidden_states = self.activation_fn(self.fc1(hidden_states))
@@ -162,6 +169,9 @@ class DecoderLayerWithDualCrossAttention(BartDecoderLayer):
         hidden_states = F.dropout(hidden_states, p=self.dropout, training=self.training)
         hidden_states = residual + hidden_states
         hidden_states = self.final_layer_norm(hidden_states)
+
+        # Debugging output after feed-forward network normalization
+        print("Post feed-forward LayerNorm:", hidden_states.mean().item(), hidden_states.std().item())
 
         if use_cache:
             present_key_value_state = (self_attn_weights, cross_attn_weights)  
@@ -192,9 +202,13 @@ class Seq2SeqModel(nn.Module):
     def forward(self, input_ids, attention_mask, decoder_input_ids, decoder_attention_mask, graph_node_features, edge_index):
         # get encoder outputs
         encoder_hidden_states = self.encoder_document(input_ids, attention_mask)
-        # get graph embeddings
-        graph_embeddings = self.encoder_graph(graph_node_features, edge_index)
-        
+
+        # get graph embeddings if not all subgraphs were pruned
+        if graph_node_features is not None and edge_index is not None:
+            graph_embeddings = self.encoder_graph(graph_node_features, edge_index)
+        else:
+            graph_embeddings = None  
+
         # initialize decoder hidden states
         hidden_states = self.bart.get_input_embeddings()(decoder_input_ids)
 
@@ -261,10 +275,10 @@ class Seq2SeqModel(nn.Module):
         batch_size = input_ids.size(0)
         device = input_ids.device
 
-        # Initialize the beam search
+        # initialize the beam search
         beams = [(torch.full((batch_size, 1), self.bart.config.bos_token_id, dtype=torch.long, device=device), 0)]  # (sequence, score)
 
-        # List to store the final hypotheses
+        # list to store the final hypotheses
         final_beams = []
 
         for step in range(max_length):
