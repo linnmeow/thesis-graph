@@ -53,6 +53,10 @@ class CNN_DM_Graph(Dataset):
                 # embed the graph
                 graph_data = embed_graph(list(G.nodes), list(G.edges), self.tokenizer, self.model, device=self.device)
                 
+            # # normalize graph data features
+            # if graph_data.x is not None:
+            #     graph_data.x = (graph_data.x - graph_data.x.mean(dim=0)) / graph_data.x.std(dim=0)
+            
                 graph_item = Data(x=graph_data.x, edge_index=graph_data.edge_index).to(self.device)
 
                 # include graph data in the item
@@ -107,12 +111,12 @@ if __name__ == "__main__":
 
     # [BOS]: 0, [EOS]: 2, [PAD]: 1
 
-    # for batch in dataloader:
-    #     if 'graph_batch' in batch:
-    #         batch['graph_batch'] = batch['graph_batch']
+    for batch in dataloader:
+        # if 'graph_batch' in batch:
+        #     print(batch['graph_batch'].x.tolist())
 
-    #     # print(batch['decoder_input_ids'].size())
-    #     print(batch['encoder_attention_mask'].tolist())
-    #     print(batch['encoder_input_ids'].tolist())
-    #     # print("Batch keys:", batch.keys())
-    #     break
+        # print(batch['decoder_input_ids'].size())
+        print(batch['encoder_attention_mask'].tolist())
+        print(batch['encoder_input_ids'].tolist())
+        # print("Batch keys:", batch.keys())
+        break

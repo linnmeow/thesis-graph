@@ -6,6 +6,7 @@ from torch_geometric.nn import GATConv
 from transformers import BartTokenizer, BartModel
 from graph_module.get_graph_embeddings import BiLSTM
 from graph_module.dataset_graph import CNN_DM_Graph, custom_collate_fn, load_data
+from graph_module.initialize_weight import xavier_initialization, kaiming_initialization, normal_initialization
 
 class GraphAttentionNetwork(nn.Module):
     def __init__(self, in_channels, out_channels, heads, dropout):
@@ -26,7 +27,7 @@ class EncoderDocument(nn.Module):
         return bart_outputs.last_hidden_state
     
 class EncoderGraph(nn.Module):
-    def __init__(self, gat_in_channels, gat_out_channels, gat_heads, dropout):
+    def __init__(self, gat_in_channels, gat_out_channels, gat_heads, dropout, initialization_scheme='kaiming'):
         super(EncoderGraph, self).__init__()
         self.gat = GraphAttentionNetwork(
             in_channels=gat_in_channels,  
@@ -35,10 +36,17 @@ class EncoderGraph(nn.Module):
             dropout=dropout
         )
 
+        # apply initialization
+        if initialization_scheme == 'xavier':
+            self.apply(xavier_initialization)
+        elif initialization_scheme == 'kaiming':
+            self.apply(kaiming_initialization)
+        elif initialization_scheme == 'normal':
+            self.apply(normal_initialization)
+
     def forward(self, graph_node_features, edge_index):
         gat_output = self.gat(graph_node_features, edge_index) # [num_nodes, out_channels * heads]
         return gat_output
-
 
 if __name__ == "__main__":
 
@@ -84,18 +92,18 @@ if __name__ == "__main__":
 
         # print(f"Input IDs Shape: {encoder_input_ids.shape}") #  [1, 1024], [batch_size, sequence_length]
         # print(f"Attention Mask Shape: {encoder_attention_mask.shape}") # [1, 1024]
-        # print(f"Graph Node Features Shape: {graph_node_features.shape}") # [17, 256 * 4], [num_nodes, out_channels * heads]
+        # print(f"Graph Node Features Shape: {graph_node_features.shape}") # [17, 96 * 8], [num_nodes, out_channels * heads]
         # print(f"Edge Index Shape: {edge_index.shape}") # [2, 14], [2, num_edges], source and target nodes (2 rows)
 
         # Pass through the document encoder
         with torch.no_grad():
             document_outputs = encoder_document(encoder_input_ids, encoder_attention_mask)
-            print(f"Document Encoder Output Shape: {document_outputs.shape}")  # [1, 1024, 1024], [batch_size, sequence_length, hidden_size]
-            # print(document_outputs)
+            print(f"Document Encoder Output Shape: {document_outputs.shape}")  # [1, 1024, 768], [batch_size, sequence_length, hidden_size]
+            print(document_outputs)
 
         # Pass through the graph encoder
         with torch.no_grad():
             if graph_node_features is not None and edge_index is not None:
                 graph_outputs = encoder_graph(graph_node_features, edge_index)
-                print(f"Graph Encoder Output Shape: {graph_outputs.shape}")  # [17, 1024], [num_nodes, out_channels]
+                print(f"Graph Encoder Output Shape: {graph_outputs.shape}")  # [17, 768], [num_nodes, out_channels]
                 # print(graph_outputs)
