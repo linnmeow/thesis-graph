@@ -25,11 +25,6 @@ def token_count_range(directory, model_name):
                 document = item.get("article", "") 
                 summary = item.get("highlights", "") 
 
-                # # xsum/ fiction
-                # document = item.get("document", "") 
-                # summary = item.get("summary", "") 
-                # # index = item.get("id", "")
-
                 # check if the document or summary is empty and print the filename and index
                 if not document or not summary:
                     print(f"Empty document or summary found in file {filename}")
@@ -80,8 +75,16 @@ def token_count_range(directory, model_name):
         "document_token_range": document_token_range,
         "summary_token_range": summary_token_range,
         "document_token_distribution": document_token_distribution,
-        "summary_token_distribution": summary_token_distribution
+        "summary_token_distribution": summary_token_distribution,
+        "document_token_counts": document_token_counts,
+        "summary_token_counts": summary_token_counts
     }
+
+def compute_average_tokens(token_counts):
+    """Compute the average number of tokens."""
+    if not token_counts:
+        return 0
+    return sum(token_counts) / len(token_counts)
 
 def main():
     parser = argparse.ArgumentParser(description="Process JSON files to calculate token ranges and distributions.")
@@ -90,12 +93,18 @@ def main():
     args = parser.parse_args()
     
     directory_path = args.directory
-    token_ranges = token_count_range(directory_path, model_name="facebook/bart-large")
+    token_ranges = token_count_range(directory_path, model_name="facebook/bart-base")
     
+    # Calculate average token numbers
+    avg_document_tokens = compute_average_tokens(token_ranges['document_token_counts'])
+    avg_summary_tokens = compute_average_tokens(token_ranges['summary_token_counts'])
+
     print(f"Document Token Range: {token_ranges['document_token_range']}")
     print(f"Summary Token Range: {token_ranges['summary_token_range']}")
     print(f"Document Token Distribution: {token_ranges['document_token_distribution']}")
     print(f"Summary Token Distribution: {token_ranges['summary_token_distribution']}")
+    print(f"Average Document Tokens: {avg_document_tokens:.2f}")
+    print(f"Average Summary Tokens: {avg_summary_tokens:.2f}")
 
 if __name__ == "__main__":
     main()
