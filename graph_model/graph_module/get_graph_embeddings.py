@@ -6,17 +6,25 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 class BiLSTM(nn.Module):
-    def __init__(self, vocab_size, embedding_dim, hidden_dim, num_layers=2, dropout=0.1):
+    def __init__(self, vocab_size, embedding_dim, hidden_dim, num_layers=2, dropout=0.1, padding_idx=0):
         super(BiLSTM, self).__init__()
-        self.embedding = nn.Embedding(vocab_size, embedding_dim)
+        self.embedding = nn.Embedding(vocab_size, embedding_dim, padding_idx=padding_idx)
         self.lstm = nn.LSTM(embedding_dim, hidden_dim, num_layers=num_layers, 
                             bidirectional=True, batch_first=True, dropout=dropout)
         self.fc = nn.Linear(hidden_dim * 2, hidden_dim)  # 2 * hidden_dim due to bidirectionality
 
-    def forward(self, x):
+    def forward(self, x, attention_mask):
         embedded = self.embedding(x)
         lstm_out, _ = self.lstm(embedded)
-        lstm_out = lstm_out[:, -1, :]  
+        
+        # apply attention mask to LSTM output
+        mask = attention_mask.unsqueeze(-1).expand(lstm_out.size())
+        lstm_out = lstm_out * mask  # zero out the padding token contributions
+        
+        # aggregate outputs, ignoring padding
+        num_tokens = attention_mask.sum(dim=1, keepdim=True)
+        lstm_out = lstm_out.sum(dim=1) / num_tokens
+        
         return self.fc(lstm_out)
 
 
@@ -36,9 +44,10 @@ def get_embeddings(text, tokenizer, model, device):
     # tokenize and convert to indices
     tokenized = tokenizer(text, return_tensors="pt", truncation=True, padding='max_length', max_length=128)
     input_ids = tokenized['input_ids'].squeeze(0).to(device)  # move to the device
-    
+    attention_mask = tokenized['attention_mask'].squeeze(0).to(device)
+  
     with torch.no_grad():
-        embedding = model(input_ids.unsqueeze(0))  # add batch dimension
+        embedding = model(input_ids.unsqueeze(0), attention_mask.unsqueeze(0))  # add batch dimension
     return embedding.squeeze()  # remove batch dimension
 
 
@@ -105,7 +114,7 @@ if __name__ == "__main__":
     tokenizer = BartTokenizer.from_pretrained('facebook/bart-base')
     vocab_size = len(tokenizer.get_vocab())
     embedding_dim = 64
-    hidden_dim = 128
+    hidden_dim = 64
 
     # initialize and move the model to the appropriate device
     bilstm_model = BiLSTM(vocab_size, embedding_dim, hidden_dim)
