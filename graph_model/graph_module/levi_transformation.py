@@ -81,16 +81,16 @@ def visualize_graph(G, entry_id):
 
 
 if __name__ == "__main__":
-    # data_folder = "/Users/lynn/desktop/thesis/cnn_dm4openie_extraction/filtered_conf_0.6_length_5"  
-    # prefixes = ["train", "valid", "test"]  
+    data_folder = "/Users/lynn/desktop/thesis/cnn_dm/original_triples/"  
+    prefixes = ["train", "valid", "test"]  
 
-    # target_entry_id = 'ca8d3c7918fe30a1ba4218a3f4105a5ddb1e29dd'
+    target_entry_id = 'ca8d3c7918fe30a1ba4218a3f4105a5ddb1e29dd'
     
-    # for prefix in prefixes:
-    #     data_path = os.path.join(data_folder, f"{prefix}_filtered.json")
+    for prefix in prefixes:
+        data_path = os.path.join(data_folder, f"{prefix}_processed.json")
     
-    data_path = "examples.json" # toy dataset
-    target_entry_id = None
+    # data_path = "examples.json" # toy dataset
+    # target_entry_id = None
     # load data
     with open(data_path, "r") as f:
         data = json.load(f)

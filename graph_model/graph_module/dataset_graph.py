@@ -90,6 +90,20 @@ def load_data(data_path):
     with open(data_path, "r") as f:
         return json.load(f)
     
+def check_zeros_in_tensor(tensor):
+    # Check for zeros in the tensor
+    zero_mask = (tensor == 0)
+    num_zeros = zero_mask.sum().item()  # Total number of zeros in the tensor
+    zero_positions = zero_mask.nonzero(as_tuple=True)  # Positions where zeros are found
+    
+    if num_zeros > 0:
+        print(f"Found {num_zeros} zeros in the tensor.")
+        print(f"Positions of zeros: {zero_positions}")
+    else:
+        print("No zeros found in the tensor.")
+    
+    return num_zeros > 0, num_zeros, zero_positions
+    
 if __name__ == "__main__":
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -112,11 +126,14 @@ if __name__ == "__main__":
     # [BOS]: 0, [EOS]: 2, [PAD]: 1
 
     for batch in dataloader:
-        # if 'graph_batch' in batch:
-        #     print(batch['graph_batch'].x.tolist())
+        if 'graph_batch' in batch:
+            print(batch['graph_batch'].x.tolist())
+            check_zeros_in_tensor(batch['graph_batch'].x)
 
         # print(batch['decoder_input_ids'].size())
-        print(batch['encoder_attention_mask'].tolist())
-        print(batch['encoder_input_ids'].tolist())
+        # print(batch['encoder_attention_mask'].tolist()) # 1 for real tokens, 0 for padding
+        # print(batch['encoder_input_ids'].tolist())
+        # print(batch['decoder_attention_mask'].tolist()) # 1 for real tokens, 0 for padding
+        # print(batch['decoder_input_ids'].tolist()) # 0 for [BOS], 2 for [EOS], 1 for [PAD]
         # print("Batch keys:", batch.keys())
         break
