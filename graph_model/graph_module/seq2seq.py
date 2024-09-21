@@ -14,15 +14,23 @@ from graph_module.initialize_weight import xavier_initialization, kaiming_initia
 from graph_module.decoder import DecoderLayerWithDualCrossAttention 
 
 class Seq2SeqModel(nn.Module):
-    def __init__(self, bart_model_name, gat_in_channels, gat_out_channels, gat_heads, dropout, initialization_scheme='xavier'):
+    def __init__(self, bart_model_name, gat_in_channels, gat_out_channels, gat_heads, dropout, 
+                 encoder_config=None, decoder_config=None, initialization_scheme='xavier'):
         super(Seq2SeqModel, self).__init__()
+        # initialize BART model and its config
         self.bart = BartModel.from_pretrained(bart_model_name)
-        self.encoder_document = EncoderDocument(bart_model_name)
+        self.bart_config = self.bart.config
+
+        # if custom config are provided, overwrite the default config
+        self.encoder_config = encoder_config if encoder_config is not None else self.bart_config
+        self.decoder_config = decoder_config if decoder_config is not None else self.bart_config
+
+        self.encoder_document = EncoderDocument(bart_model_name, encoder_config=self.encoder_config)
         self.encoder_graph = EncoderGraph(gat_in_channels, gat_out_channels, gat_heads, dropout)
         self.decoder = nn.ModuleList([
-            DecoderLayerWithDualCrossAttention(self.bart.config) for _ in range(self.bart.config.decoder_layers)
+            DecoderLayerWithDualCrossAttention(decoder_config=self.decoder_config) for _ in range(self.decoder_config.decoder_layers)
         ])
-        self.output_proj = nn.Linear(self.bart.config.d_model, self.bart.config.vocab_size)
+        self.output_proj = nn.Linear(self.decoder_config.d_model, self.decoder_config.vocab_size)
 
         # apply initialization
         if initialization_scheme == 'xavier':
@@ -42,14 +50,10 @@ class Seq2SeqModel(nn.Module):
         else:
             graph_embeddings = None  
 
-        # initialize decoder hidden states
-        hidden_states = self.bart.get_input_embeddings()(decoder_input_ids)
-
         # apply custom decoder layers
         for layer in self.decoder:
             hidden_states = layer(
                 decoder_input_ids=decoder_input_ids,
-                hidden_states=hidden_states,
                 attention_mask=decoder_attention_mask,
                 encoder_hidden_states=encoder_hidden_states,
                 encoder_attention_mask=attention_mask,
@@ -82,17 +86,18 @@ class Seq2SeqModel(nn.Module):
         min_length,
         ngram_size
     ):
+        # generate summary using greedy decoding
         self.eval()
         batch_size = input_ids.size(0)
         device = input_ids.device
 
-        # Initialize decoder input with BOS token
+        # initialize decoder input with BOS token
         generated_ids = torch.full((batch_size, 1), self.bart.config.bos_token_id, dtype=torch.long, device=device)
         
         used_ngrams = set()
 
         for step in range(max_length):
-            # Forward pass
+            # forward pass
             outputs = self.forward(
                 input_ids=input_ids,
                 attention_mask=attention_mask,
@@ -135,7 +140,6 @@ class Seq2SeqModel(nn.Module):
 
         return generated_ids
 
-
     def generate_summary_with_beam_search(
         self,
         input_ids,
@@ -154,65 +158,72 @@ class Seq2SeqModel(nn.Module):
         # initialize the beam search
         beams = [(torch.full((batch_size, 1), self.bart.config.bos_token_id, dtype=torch.long, device=device), 0, set())]  # (sequence, score, used_ngrams)
 
-        # list to store the final hypotheses
         final_beams = []
 
-        for step in range(max_length):
-            new_beams = []
+        with torch.no_grad():
+            for step in range(max_length):
+                new_beams = []
 
-            # iterate over all beams
-            for seq, score, used_ngrams in beams:
-                # forward pass
-                outputs = self.forward(
-                    input_ids=input_ids,
-                    attention_mask=attention_mask,
-                    decoder_input_ids=seq,
-                    decoder_attention_mask=None,  # no mask needed during inference
-                    graph_node_features=graph_node_features,
-                    edge_index=edge_index,
-                    use_cache=True
-                )
+                # iterate over all beams
+                for seq, score, used_ngrams in beams:
+                    outputs = self.forward(
+                        input_ids=input_ids,
+                        attention_mask=attention_mask,
+                        decoder_input_ids=seq,
+                        decoder_attention_mask=None,
+                        graph_node_features=graph_node_features,
+                        edge_index=edge_index,
+                        use_cache=True
+                    )
 
-                # get logits and scores for the last token
-                logits = outputs[:, -1, :]
-                probs = F.log_softmax(logits, dim=-1)  # get log probabilities
+                    # Get log probabilities for the last token
+                    logits = outputs[:, -1, :]
+                    log_probs = F.log_softmax(logits, dim=-1)
 
-                # expand the beams
-                for token_id in range(logits.size(-1)):
-                    new_seq = torch.cat([seq, torch.full((batch_size, 1), token_id, dtype=torch.long, device=device)], dim=1)
-                    new_score = score + probs[:, token_id].item()
+                    # expand the beams using vectorized operations
+                    top_log_probs, top_indices = log_probs.topk(beam_size, dim=-1)
 
-                    # ensure that the <eos> token is not selected before reaching min_length
-                    if step + 1 < min_length and token_id == self.bart.config.eos_token_id:
-                        continue  # skip adding this sequence if it ends with <eos> before min_length
-                    
-                    # check for repeated n-grams
-                    new_used_ngrams = used_ngrams.copy()
-                    new_seq_list = new_seq[0].tolist()
-                    if self._contains_repeated_ngrams(new_seq_list, ngram_size, new_used_ngrams):
-                        continue
+                    # iterate over the top tokens
+                    for i in range(beam_size):
+                        token_id = top_indices[0, i].item()
+                        token_log_prob = top_log_probs[0, i].item()
+                        new_score = score + token_log_prob
 
-                    # Add new sequence and score
-                    new_used_ngrams.update(self._get_ngrams(new_seq_list, ngram_size))
-                    new_beams.append((new_seq, new_score, new_used_ngrams))
+                        # create a new sequence by appending the token
+                        new_seq = torch.cat([seq, torch.full((batch_size, 1), token_id, dtype=torch.long, device=device)], dim=1)
 
-            # prune beams
-            new_beams = sorted(new_beams, key=lambda x: x[1], reverse=True)[:beam_size]
+                        # ensure the <eos> token is not selected before reaching min_length
+                        if step + 1 < min_length and token_id == self.bart.config.eos_token_id:
+                            continue  # Skip if <eos> is selected too early
 
-            # check if end-of-sequence token reached
-            final_beams.extend([beam for beam in new_beams if beam[0][0, -1].item() == self.bart.config.eos_token_id and step + 1 >= min_length])
-            new_beams = [beam for beam in new_beams if beam[0][0, -1].item() != self.bart.config.eos_token_id or step + 1 < min_length]
+                        # check for repeated n-grams
+                        new_used_ngrams = used_ngrams.copy()
+                        new_seq_list = new_seq[0].tolist()
+                        if self._contains_repeated_ngrams(new_seq_list, ngram_size, new_used_ngrams):
+                            continue
 
-            if not new_beams and final_beams:
-                # if no more beams but some final sequences, break early
-                break
+                        # add new sequence and score
+                        new_used_ngrams.update(self._get_ngrams(new_seq_list, ngram_size))
+                        new_beams.append((new_seq, new_score, new_used_ngrams))
 
-            beams = new_beams
+                # prune beams and keep top beam_size sequences
+                new_beams = sorted(new_beams, key=lambda x: x[1], reverse=True)[:beam_size]
 
-        # get the best sequence
+                # move completed beams to final_beams
+                final_beams.extend([beam for beam in new_beams if beam[0][0, -1].item() == self.bart.config.eos_token_id and step + 1 >= min_length])
+                new_beams = [beam for beam in new_beams if beam[0][0, -1].item() != self.bart.config.eos_token_id or step + 1 < min_length]
+
+                # if no more beams to expand and we have final beams, break early
+                if not new_beams and final_beams:
+                    break
+
+                beams = new_beams
+
+        # if no final beams found, use the remaining beams
         if not final_beams:
             final_beams = beams
 
+        # select the best sequence from final beams
         best_seq = max(final_beams, key=lambda x: x[1])[0]
 
         return best_seq
