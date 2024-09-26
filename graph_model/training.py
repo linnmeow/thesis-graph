@@ -214,7 +214,7 @@ def main():
         "vocab_size": None,  # set dynamically from tokenizer
         "embedding_dim": 64,
         "hidden_dim": 128,
-        "gat_in_channels": 128,
+        "gat_in_channels": 50,
         "gat_out_channels": 96,
         "gat_heads": 8,
         "dropout": 0.6, # GAT dropout
@@ -245,9 +245,9 @@ def main():
     bilstm_model.eval()
 
     # load dataset
-    train_data = load_data('examples.json')
-    valid_data = load_data('valid.json')
-    test_data = load_data('test.json')
+    train_data = open_json_file(config["data_directory"], "train")
+    valid_data = open_json_file(config["data_directory"], "valid")
+    test_data = open_json_file(config["data_directory"], "test")
 
     # create datasets and dataloaders
     train_dataset = CNN_DM_Graph(train_data, tokenizer, max_length=1024, model=bilstm_model, device=device)
