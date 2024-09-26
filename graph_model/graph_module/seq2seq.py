@@ -68,14 +68,14 @@ class Seq2SeqModel(nn.Module):
     
     def _get_ngrams(self, sequence, n):
         return set(tuple(sequence[i:i+n]) for i in range(len(sequence) - n + 1))
-    
+        
     def _contains_repeated_ngrams(self, sequence, ngram_size, used_ngrams):
         for n in range(1, ngram_size + 1):
             ngrams = self._get_ngrams(sequence, n)
             if ngrams.intersection(used_ngrams):
                 return True
         return False
-        
+                
     def generate_summary(
         self,
         input_ids,
@@ -112,31 +112,45 @@ class Seq2SeqModel(nn.Module):
             logits = outputs[:, -1, :]
             probs = F.log_softmax(logits, dim=-1)
             
-            # Sample the next token
+            # sample the next token
             next_token_probs = probs.squeeze(1)  # Remove the sequence dimension
-            next_token_id = torch.argmax(next_token_probs, dim=-1).unsqueeze(1)
+            next_token_id = torch.argmax(next_token_probs, dim=-1).unsqueeze(1)  # Keep shape [batch_size, 1]
 
-            # Check if the new token results in repeated n-grams
-            new_sequence = torch.cat([generated_ids, next_token_id], dim=1)
-            new_sequence_list = new_sequence[0].tolist()
-            
-            # Handling repeated n-grams
+            # concatenate keeping the batch structure
+            new_sequence = torch.cat([generated_ids, next_token_id], dim=1)  # [batch_size, sequence_length]
+
+            # convert to list of tuples for n-gram checking
+            new_sequence_list = [tuple(seq) for seq in new_sequence.tolist()]
+
+            # check for repeated n-grams
             if self._contains_repeated_ngrams(new_sequence_list, ngram_size, used_ngrams):
-                # Ensure at least two tokens are available before calling topk
-                if next_token_probs.size(0) > 1:
-                    next_token_id = torch.topk(next_token_probs, 2).indices[1].unsqueeze(1)
+                # ensure at least two tokens are available before calling topk
+                if next_token_probs.size(1) > 1:
+                    next_token_id = torch.topk(next_token_probs, 2, dim=-1).indices[:, 1].unsqueeze(1)
                 else:
-                    next_token_id = torch.topk(next_token_probs, 1).indices[0].unsqueeze(1)
+                    next_token_id = torch.topk(next_token_probs, 1, dim=-1).indices[:, 0].unsqueeze(1)
 
-            # Append the predicted token to the generated sequence
-            generated_ids = torch.cat([generated_ids, next_token_id], dim=1)
+            # append the predicted token to the generated sequence
+            generated_ids = torch.cat([generated_ids, next_token_id], dim=1)  # [batch_size, sequence_length]
 
             # Update used n-grams
             used_ngrams.update(self._get_ngrams(new_sequence_list, ngram_size))
 
-            # Ensure min_length constraint is met before allowing <eos> token to break the loop
-            if step >= min_length and next_token_id.item() == self.bart.config.eos_token_id:
-                break
+            # # Print debugging information
+            # print(f"Step: {step}, Min Length: {min_length}")
+
+            # Check for EOS tokens across the batch
+            eos_found = (next_token_id.squeeze() == self.bart.config.eos_token_id)
+
+            if step >= min_length and eos_found.any():
+                print("EOS token found in batch, stopping generation.")
+                break  # Stop if any sequence reached the EOS token
+            else:
+                print("EOS token not found in batch, continuing generation.")
+
+            # # Print if multiple tokens are generated
+            # if next_token_id.shape[0] > 1:
+            #     print(f"Multiple tokens generated: {next_token_id.tolist()}")
 
         return generated_ids
 
