@@ -124,7 +124,7 @@ def validate_model(val_loader, model, tokenizer):
     avg_loss = total_loss / len(val_loader)
     return avg_loss
 
-def test_model(model, dataloader, tokenizer, output_file, min_length, max_length, ngram_size):
+def test_model(model, dataloader, tokenizer, output_file, min_length, max_length, ngram_size, beam_size):
     model.eval()
     results = []
     total_loss = 0
@@ -138,9 +138,9 @@ def test_model(model, dataloader, tokenizer, output_file, min_length, max_length
             edge_index = batch['graph_batch'].edge_index
 
             generate_func = (
-                model.module.generate_summary 
+                model.module.generate_summary_with_beam_search 
                 if hasattr(model, 'module') 
-                else model.generate_summary
+                else model.generate_summary_with_beam_search
             )
 
             summary_tokens = generate_func(
@@ -150,7 +150,7 @@ def test_model(model, dataloader, tokenizer, output_file, min_length, max_length
                 edge_index=edge_index,
                 min_length=min_length,
                 max_length=max_length,
-                # beam_size=beam_size,
+                beam_size=beam_size,
                 ngram_size=ngram_size
             )
 
@@ -203,18 +203,18 @@ def test_model(model, dataloader, tokenizer, output_file, min_length, max_length
 def main():
 
     config = {
-        "data_directory": "/Users/lynn/Desktop/thesis/cnn_dm/original_triples/",
-        "output_file": "/Users/lynn/Desktop/thesis/cnn_dm/original_triples/generated_summaries.json",
-        "model_save_path": "/Users/lynn/Desktop/thesis/cnn_dm/",
+        "data_directory": "/local/linye/thesis-graph/cnn_dm/original_triples/",
+        "output_file": "/local/linye/thesis-graph/cnn_dm/original_triples/generated_summaries.json",
+        "model_save_path": "/local/linye/thesis-graph/cnn_dm/",
         "batch_size": 4,
-        "num_epochs": 1,
+        "num_epochs": 64,
         "patience": 2,
         "learning_rate": 1e-5,
         "bart_model_name": 'facebook/bart-base',
         "vocab_size": None,  # set dynamically from tokenizer
         "embedding_dim": 64,
         "hidden_dim": 128,
-        "gat_in_channels": 50,
+        "gat_in_channels": 128,
         "gat_out_channels": 96,
         "gat_heads": 8,
         "dropout": 0.6, # GAT dropout
@@ -303,7 +303,7 @@ def main():
         output_file=config['output_file'],
         min_length=config['min_length'],  
         max_length=config['max_length'],
-        # beam_size=config['beam_size'], 
+        beam_size=config['beam_size'], 
         ngram_size=config['ngram_size']
     )
 
