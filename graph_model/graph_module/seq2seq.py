@@ -148,10 +148,6 @@ class Seq2SeqModel(nn.Module):
             else:
                 print("EOS token not found in batch, continuing generation.")
 
-            # # Print if multiple tokens are generated
-            # if next_token_id.shape[0] > 1:
-            #     print(f"Multiple tokens generated: {next_token_id.tolist()}")
-
         return generated_ids
 
     def generate_summary_with_beam_search(
@@ -170,74 +166,79 @@ class Seq2SeqModel(nn.Module):
         device = input_ids.device
 
         # initialize the beam search
-        beams = [(torch.full((batch_size, 1), self.bart.config.bos_token_id, dtype=torch.long, device=device), 0, set())]  # (sequence, score, used_ngrams)
-
-        final_beams = []
+        beams = [[(torch.full((1, 1), self.bart.config.bos_token_id, dtype=torch.long, device=device), 0, set())] for _ in range(batch_size)]  # (sequence, score, used_ngrams)
+        final_beams = [[] for _ in range(batch_size)]  # initialize final beams for each batch item
 
         with torch.no_grad():
             for step in range(max_length):
-                new_beams = []
+                new_beams = [[] for _ in range(batch_size)]  # to store new beams for each batch
+                
+                # expand beams for each item in the batch
+                for batch_idx in range(batch_size):
+                    for seq, score, used_ngrams in beams[batch_idx]:
+                        # forward pass
+                        outputs = self.forward(
+                            input_ids=input_ids[batch_idx].unsqueeze(0),
+                            attention_mask=attention_mask[batch_idx].unsqueeze(0),
+                            decoder_input_ids=seq,
+                            decoder_attention_mask=None,
+                            graph_node_features=graph_node_features[batch_idx].unsqueeze(0) if graph_node_features is not None else None,
+                            edge_index=edge_index[batch_idx],
+                            use_cache=True
+                        )
 
-                # iterate over all beams
-                for seq, score, used_ngrams in beams:
-                    outputs = self.forward(
-                        input_ids=input_ids,
-                        attention_mask=attention_mask,
-                        decoder_input_ids=seq,
-                        decoder_attention_mask=None,
-                        graph_node_features=graph_node_features,
-                        edge_index=edge_index,
-                        use_cache=True
-                    )
+                        # get log probabilities for the last token
+                        logits = outputs[:, -1, :]
+                        log_probs = F.log_softmax(logits, dim=-1)
 
-                    # Get log probabilities for the last token
-                    logits = outputs[:, -1, :]
-                    log_probs = F.log_softmax(logits, dim=-1)
+                        # expand the beams using vectorized operations
+                        top_log_probs, top_indices = log_probs.topk(beam_size, dim=-1)
 
-                    # expand the beams using vectorized operations
-                    top_log_probs, top_indices = log_probs.topk(beam_size, dim=-1)
+                        # iterate over the top tokens for one batch item
+                        for i in range(beam_size):
+                            token_id = top_indices[0, i].item()
+                            token_log_prob = top_log_probs[0, i].item()
+                            new_score = score + token_log_prob
 
-                    # iterate over the top tokens
-                    for i in range(beam_size):
-                        token_id = top_indices[0, i].item()
-                        token_log_prob = top_log_probs[0, i].item()
-                        new_score = score + token_log_prob
+                            # create a new sequence by appending the token
+                            new_seq = torch.cat([seq, torch.full((1, 1), token_id, dtype=torch.long, device=device)], dim=1)
 
-                        # create a new sequence by appending the token
-                        new_seq = torch.cat([seq, torch.full((batch_size, 1), token_id, dtype=torch.long, device=device)], dim=1)
+                            # check if the token is EOS and the sequence is long enough to stop
+                            if step + 1 >= min_length and token_id == self.bart.config.eos_token_id:
+                                final_beams[batch_idx].append((new_seq, new_score, used_ngrams.copy())) 
+                                continue  # skip further expansion of this beam
+                            
+                            # avoid repeating n-grams
+                            if self._contains_repeated_ngrams(new_seq.tolist(), ngram_size, used_ngrams):
+                                continue
 
-                        # ensure the <eos> token is not selected before reaching min_length
-                        if step + 1 < min_length and token_id == self.bart.config.eos_token_id:
-                            continue  # Skip if <eos> is selected too early
+                            # update n-grams for this batch item
+                            new_used_ngrams = used_ngrams.copy()
+                            new_used_ngrams.update(self._get_ngrams(new_seq.tolist(), ngram_size))
 
-                        # check for repeated n-grams
-                        new_used_ngrams = used_ngrams.copy()
-                        new_seq_list = new_seq[0].tolist()
-                        if self._contains_repeated_ngrams(new_seq_list, ngram_size, new_used_ngrams):
-                            continue
+                            new_beams[batch_idx].append((new_seq, new_score, new_used_ngrams))  # add new beam
 
-                        # add new sequence and score
-                        new_used_ngrams.update(self._get_ngrams(new_seq_list, ngram_size))
-                        new_beams.append((new_seq, new_score, new_used_ngrams))
-
-                # prune beams and keep top beam_size sequences
-                new_beams = sorted(new_beams, key=lambda x: x[1], reverse=True)[:beam_size]
-
-                # move completed beams to final_beams
-                final_beams.extend([beam for beam in new_beams if beam[0][0, -1].item() == self.bart.config.eos_token_id and step + 1 >= min_length])
-                new_beams = [beam for beam in new_beams if beam[0][0, -1].item() != self.bart.config.eos_token_id or step + 1 < min_length]
-
-                # if no more beams to expand and we have final beams, break early
-                if not new_beams and final_beams:
-                    break
+                # prune beams for each batch item
+                for batch_idx in range(batch_size):
+                    new_beams[batch_idx] = sorted(new_beams[batch_idx], key=lambda x: x[1], reverse=True)[:beam_size]
 
                 beams = new_beams
 
-        # if no final beams found, use the remaining beams
-        if not final_beams:
-            final_beams = beams
+                # check if all sequences in the batch are finished
+                all_finished = all(len(final_beams[batch_idx]) > 0 for batch_idx in range(batch_size))
+                if all_finished:
+                    break
 
-        # select the best sequence from final beams
-        best_seq = max(final_beams, key=lambda x: x[1])[0]
+            for batch_idx in range(batch_size):
+                if len(final_beams[batch_idx]) == 0:
+                    final_beams[batch_idx] = new_beams[batch_idx]
 
-        return best_seq
+                # get the best sequence for each batch item
+                final_beams[batch_idx] = sorted(final_beams[batch_idx], key=lambda x: x[1], reverse=True)
+            
+            # return the best sequences for the batch
+            best_sequences = [final_beams[batch_idx][0][0] for batch_idx in range(batch_size)]
+
+        return best_sequences
+
+
