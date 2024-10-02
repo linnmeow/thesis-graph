@@ -1,1 +1,8 @@
-python evaluator.py --data_dir /Users/lynn/desktop/thesis/cnn_dm4openie_extraction/article_collections  --file_prefix test --metric_name bert_score
+# baseline 
+python lead3_evaluator.py --data_dir /Users/lynn/desktop/thesis/cnn_dm/article_collections  --file_prefix test --metric_name bertscore
+
+# novel ngram
+python novel_ngram.py /Users/lynn/desktop/thesis/cnn_dm/article_collections/generated_summaries.json --ngram 2
+
+# relation matching rate
+python rmr.py /Users/lynn/desktop/thesis/cnn_dm/article_collections/generated_summaries.json
