@@ -2,6 +2,9 @@
 
 This repository contains the implementation of a **graph-augmented sequence-to-sequence (Seq2Seq) model** designed to enhance **factual consistency** in abstractive text summarization. By integrating **knowledge graphs** with contextual embeddings, the model addresses challenges in accurately capturing entity relationships and minimizing factual inconsistencies in generated summaries.  
 
+<img width="1119" alt="model_arc" src="https://github.com/user-attachments/assets/c1186283-dbf6-4de0-9ee1-3c622baa1669" />
+(model architecture)
+
 ## Key Features  
 - **Dual Cross-Attention Mechanism**: Combines contextual embeddings from a document encoder with graph-based representations from a graph encoder.  
 - **Knowledge Graph Integration**: Constructs structured representations of entities and relations from source texts to enrich semantic understanding.  
